@@ -1,0 +1,55 @@
+create table if not exists profile(
+    profile_id UUID primary key,
+    name text,
+    username text unique,
+    avatar text,
+    description text,
+    subscribers_amount int not null default 0 check(subscribers_amount >= 0),
+    subscribed_amount int not null default 0 check(subscribed_amount >=0),
+    posts_amount int not null default 0 check(posts_amount >=0),
+    is_completed boolean not null default false
+);
+
+create table if not exists credentials(
+    credentials_id UUID primary key,
+    profile_id UUID,
+    email text unique not null,
+    hashed_password text not null,
+    created_at timestamp not null default now(),
+    status text not null default 'pending' check (status in ('pending', 'active')),
+    foreign key (profile_id) references profile(profile_id)
+);
+
+create table if not exists verification(
+    verification_id uuid primary key,
+    credentials_id uuid not null unique,
+    code varchar(6) not null check (length(code) = 6),
+    expires_at timestamp not null,
+    foreign key (credentials_id) references credentials(credentials_id) on delete cascade
+);
+
+create table if not exists refresh_token(
+    refresh_token_id uuid primary key,
+    profile_id uuid not null,
+    refresh_token text not null,
+    expires_at timestamp not null,
+    foreign key (profile_id) references profile(profile_id) on delete cascade
+);
+
+create table if not exists subscription(
+    subscription_id uuid primary key,
+    subscriber_id uuid not null,
+    subscribed_id uuid not null,
+    unique(subscriber_id, subscribed_id),
+    foreign key(subscriber_id) references profile(profile_id) on delete cascade,
+    foreign key(subscribed_id) references profile(profile_id) on delete cascade
+);
+
+create table if not exists blacklist(
+    blacklist_id uuid primary key,
+    profile_id uuid not null,
+    banned_profile_id uuid not null,
+    unique(profile_id, banned_profile_id),
+    foreign key (profile_id) references profile(profile_id) on delete cascade,
+    foreign key(banned_profile_id) references profile(profile_id) on delete cascade
+);
