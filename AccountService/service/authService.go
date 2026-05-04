@@ -66,3 +66,49 @@ func (s *AuthService) Register(email, password string) (string, error) {
 	}
 	return token, nil
 }
+
+func (s *AuthService) VerifyEmail(email, code string) error {
+	ctx := context.Background()
+	tx, err := s.repo.DB.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	cred, err := s.repo.GetCredentialsByEmail(ctx, tx, email)
+	if err != nil {
+		return err
+	}
+	verif, err := s.repo.GetVerificationByCredentialsID(ctx, tx, cred.CredentialsID)
+	if err != nil {
+		return err
+	}
+	if verif.Code != code {
+		return errors.New("Verification code does not match")
+	}
+	if time.Now().After(verif.ExpiresAt) {
+		return errors.New("Code expired")
+	}
+	var profileID uuid.UUID
+	if cred.ProfileID == nil {
+		profileID = uuid.New()
+		err = s.repo.CreateProfile(ctx, tx, profileID)
+		if err != nil {
+			return err
+		}
+		err = s.repo.AttachProfile(ctx, tx, cred.CredentialsID, profileID)
+		if err != nil {
+			return err
+		}
+	}
+
+	err = s.repo.ActivateCredentials(ctx, tx, cred.CredentialsID)
+	if err != nil {
+		return err
+	}
+	err = s.repo.DeleteVerification(ctx, tx, verif.CredentialsID)
+	if err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}

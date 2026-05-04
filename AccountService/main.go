@@ -23,6 +23,7 @@ func main() {
 	router := gin.Default()
 
 	router.POST("/register", handler.Register)
+	router.POST("/verify-email", handler.VerifyEmail)
 
 	router.Run(":8080")
 
