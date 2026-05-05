@@ -7,6 +7,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"time"
 )
 
 type AuthRepository struct {
@@ -122,5 +123,10 @@ func (r *AuthRepository) AttachProfile(ctx context.Context, tx pgx.Tx, credID, p
 // Смена статуса credentials на active
 func (r *AuthRepository) ActivateCredentials(ctx context.Context, tx pgx.Tx, credID uuid.UUID) error {
 	_, err := tx.Exec(ctx, `UPDATE credentials SET status='active' WHERE credentials_id=$1`, credID)
+	return err
+}
+
+func (r *AuthRepository) SaveRefreshToken(ctx context.Context, tx pgx.Tx, profileID, refreshID uuid.UUID, refreshToken string, expTime time.Time) error {
+	_, err := tx.Exec(ctx, `INSERT INTO refresh_token (refresh_token_id, profile_id, refresh_token, expires_at) VALUES ($1, $2, $3, $4)`, refreshID, profileID, refreshToken, expTime)
 	return err
 }

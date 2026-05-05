@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-func getSecret() []byte {
+func getRegisterSecret() []byte {
 	return []byte(os.Getenv("JWT_REGISTER_SECRET"))
 }
 
@@ -27,12 +27,12 @@ func GenerateRegisterToken(email string) (string, error) {
 		"iat":   time.Now().Unix(),
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return token.SignedString(getSecret())
+	return token.SignedString(getRegisterSecret())
 }
 
 func ParseRegisterToken(tokenStr string) (jwt.MapClaims, error) {
 	token, err := jwt.Parse(tokenStr, func(t *jwt.Token) (interface{}, error) {
-		return getSecret(), nil
+		return getRegisterSecret(), nil
 	})
 	if err != nil {
 		return nil, err
