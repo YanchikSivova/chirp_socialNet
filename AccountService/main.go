@@ -22,10 +22,10 @@ func main() {
 
 	router := gin.Default()
 
-	router.POST("/register", handler.Register)
-	router.POST("/verify-email", handler.VerifyEmail)
-	router.POST("/resend-verification", handler.ResendVerificationEmail)
-	router.POST("/login", handler.Login)
+	router.POST("/auth/register", handler.Register)
+	router.POST("/auth/verify-email", handler.VerifyEmail)
+	router.POST("/auth/resend-verification", handler.ResendVerificationEmail)
+	router.POST("/auth/login", handler.Login)
 
 	router.Run(":8080")
 

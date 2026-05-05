@@ -1,3 +1,4 @@
 docs
-/AccountService/.env
+./AccountService/.env
+./Gateway/.env
 docker-compose.yml
