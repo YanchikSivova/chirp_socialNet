@@ -16,11 +16,21 @@ func main() {
 	}
 
 	//PUBLIC routes
-	authGroup := r.Group("/auth")
+	publicAuth := r.Group("/auth")
 	{
-		authGroup.Any("/*path", proxy.ProxyHandler(accountProxy))
+		publicAuth.POST("/register", proxy.ProxyHandler(accountProxy))
+		publicAuth.POST("/verify-email", proxy.ProxyHandler(accountProxy))
+		publicAuth.POST("/resend-verification", proxy.ProxyHandler(accountProxy))
+		publicAuth.POST("/login", proxy.ProxyHandler(accountProxy))
+		publicAuth.POST("/refresh", proxy.ProxyHandler(accountProxy))
+		publicAuth.POST("/refresh/logout", proxy.ProxyHandler(accountProxy))
 	}
 
+	protectedAuth := r.Group("/auth")
+	protectedAuth.Use(middleware.AuthMiddleware())
+	{
+		protectedAuth.POST("/logout-all", proxy.ProxyHandler(accountProxy))
+	}
 	//PROTECTED routes
 	protected := r.Group("/users")
 	protected.Use(middleware.AuthMiddleware())

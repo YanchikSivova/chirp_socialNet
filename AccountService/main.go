@@ -27,6 +27,8 @@ func main() {
 	router.POST("/auth/resend-verification", handler.ResendVerificationEmail)
 	router.POST("/auth/login", handler.Login)
 	router.POST("/auth/refresh", handler.Refresh)
+	router.POST("/auth/refresh/logout", handler.Logout)
+	router.POST("/auth/logout-all", handler.LogoutAll)
 
 	router.Run(":8080")
 

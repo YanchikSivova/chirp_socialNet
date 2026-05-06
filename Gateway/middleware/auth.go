@@ -49,7 +49,7 @@ func AuthMiddleware() gin.HandlerFunc {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "no profile id found"})
 			return
 		}
-		c.Request.Header.Set("X-User_Id", profileID)
+		c.Request.Header.Set("X-User-Id", profileID)
 		c.Next()
 	}
 }

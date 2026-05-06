@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"errors"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	"os"
@@ -32,13 +33,19 @@ func GenerateRefreshToken(profileID, refreshID uuid.UUID) (time.Time, string, er
 func ParseRefreshToken(tokenStr string) (jwt.MapClaims, error) {
 	token, err := jwt.Parse(tokenStr, func(token *jwt.Token) (interface{}, error) { return getJWTSecret(), nil })
 	if err != nil {
+		if errors.Is(err, jwt.ErrTokenExpired) {
+			if claims, ok := token.Claims.(jwt.MapClaims); ok {
+				return claims, jwt.ErrTokenExpired
+			}
+		}
 		return nil, err
 	}
 	if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-		return nil, err
+		return nil, errors.New("Unexpected signing method")
 	}
-	if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
-		return claims, nil
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if !ok || !token.Valid {
+		return nil, errors.New("Invalid token")
 	}
-	return nil, err
+	return claims, nil
 }

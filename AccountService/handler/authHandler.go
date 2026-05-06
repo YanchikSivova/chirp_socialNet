@@ -5,6 +5,7 @@ import (
 	"accountService/utils"
 	"errors"
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"net/http"
 )
 
@@ -23,7 +24,7 @@ type VerifyEmailRequest struct {
 	Code  string `json:"code" binding:"required"`
 }
 
-type VerifyEmailResponse struct {
+type SuccessResponse struct {
 	Success bool `json:"success"`
 }
 
@@ -74,7 +75,7 @@ func (h *AuthHandler) VerifyEmail(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, VerifyEmailResponse{
+	c.JSON(http.StatusOK, SuccessResponse{
 		Success: true,
 	})
 }
@@ -148,5 +149,52 @@ func (h *AuthHandler) Refresh(c *gin.Context) {
 	c.SetCookie("refresh_token", refresh, 7*24*60*60, "/auth/refresh", "", false, true)
 	c.JSON(http.StatusOK, LoginResponse{
 		AccessToken: access,
+	})
+}
+
+func (h *AuthHandler) Logout(c *gin.Context) {
+	refreshToken, err := c.Cookie("refresh_token")
+	if err != nil {
+		if err == http.ErrNoCookie {
+			c.JSON(http.StatusOK, SuccessResponse{
+				Success: true,
+			})
+			return
+		}
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	err = h.service.Logout(refreshToken)
+	if err != nil {
+		if err == errors.New("failed to logout") {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+	}
+	c.SetCookie("refresh_token", "", -1, "/", "", false, true)
+	c.JSON(http.StatusOK, SuccessResponse{
+		Success: true,
+	})
+}
+
+func (h *AuthHandler) LogoutAll(c *gin.Context) {
+	profileIdStr := c.GetHeader("X-User-Id")
+	if profileIdStr == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "no profile_id provided"})
+		return
+	}
+	profileID, err := uuid.Parse(profileIdStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	err = h.service.LogoutAll(profileID)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		return
+	}
+	c.SetCookie("refresh_token", "", -1, "/", "", false, true)
+	c.JSON(http.StatusOK, SuccessResponse{
+		Success: true,
 	})
 }

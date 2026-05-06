@@ -132,8 +132,21 @@ func (r *AuthRepository) SaveRefreshToken(ctx context.Context, tx pgx.Tx, profil
 	return err
 }
 
+// проверка существует ли refresh token
+func (r *AuthRepository) RefreshExists(ctx context.Context, tx pgx.Tx, refresh_id uuid.UUID) (bool, error) {
+	var exists bool
+	err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM refresh_token WHERE refresh_token_id=$1)`, refresh_id).Scan(&exists)
+	return exists, err
+}
+
 // Удаление refresh токена
 func (r *AuthRepository) DeleteRefreshToken(ctx context.Context, tx pgx.Tx, refreshTokenID uuid.UUID) error {
 	_, err := tx.Exec(ctx, `DELETE FROM refresh_token WHERE refresh_token_id = $1`, refreshTokenID)
+	return err
+}
+
+// Удаление всех refresh токенов по profile_id
+func (r *AuthRepository) DeleteRefreshByProfile(ctx context.Context, tx pgx.Tx, profileID uuid.UUID) error {
+	_, err := tx.Exec(ctx, `DELETE FROM refresh_token WHERE profile_id=$1`, profileID)
 	return err
 }
