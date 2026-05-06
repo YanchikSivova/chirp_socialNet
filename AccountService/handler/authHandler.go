@@ -106,8 +106,7 @@ func (h *AuthHandler) ResendVerificationEmail(c *gin.Context) {
 }
 
 type LoginResponse struct {
-	AccessToken  string `json:"access_token"`
-	RefreshToken string `json:"refresh_token"`
+	AccessToken string `json:"access_token"`
 }
 
 func (h *AuthHandler) Login(c *gin.Context) {
@@ -125,9 +124,29 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	c.SetCookie("refresh_token", refresh, 7*24*60*60, "/refresh", "", false, true)
+	c.SetCookie("refresh_token", refresh, 7*24*60*60, "/auth/refresh", "", false, true)
 	c.JSON(http.StatusOK, LoginResponse{
-		AccessToken:  access,
-		RefreshToken: refresh,
+		AccessToken: access,
+	})
+}
+
+func (h *AuthHandler) Refresh(c *gin.Context) {
+	oldRefreshToken, err := c.Cookie("refresh_token")
+	if err != nil {
+		if err == http.ErrNoCookie {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "no refresh token"})
+			return
+		}
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	access, refresh, err := h.service.AuthRefresh(oldRefreshToken)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		return
+	}
+	c.SetCookie("refresh_token", refresh, 7*24*60*60, "/auth/refresh", "", false, true)
+	c.JSON(http.StatusOK, LoginResponse{
+		AccessToken: access,
 	})
 }

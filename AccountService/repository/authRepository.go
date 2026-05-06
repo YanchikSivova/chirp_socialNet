@@ -126,7 +126,14 @@ func (r *AuthRepository) ActivateCredentials(ctx context.Context, tx pgx.Tx, cre
 	return err
 }
 
+// Сохранение refresh токена
 func (r *AuthRepository) SaveRefreshToken(ctx context.Context, tx pgx.Tx, profileID, refreshID uuid.UUID, refreshToken string, expTime time.Time) error {
 	_, err := tx.Exec(ctx, `INSERT INTO refresh_token (refresh_token_id, profile_id, refresh_token, expires_at) VALUES ($1, $2, $3, $4)`, refreshID, profileID, refreshToken, expTime)
+	return err
+}
+
+// Удаление refresh токена
+func (r *AuthRepository) DeleteRefreshToken(ctx context.Context, tx pgx.Tx, refreshTokenID uuid.UUID) error {
+	_, err := tx.Exec(ctx, `DELETE FROM refresh_token WHERE refresh_token_id = $1`, refreshTokenID)
 	return err
 }

@@ -204,5 +204,52 @@ func (s *AuthService) Login(email, password string) (string, string, error) {
 	if err != nil {
 		return "", "", err
 	}
-	return access, refreshT.RefreshToken, nil
+	return access, refreshT.RefreshToken, tx.Commit(ctx)
+}
+
+func (s *AuthService) AuthRefresh(refresh string) (string, string, error) {
+	ctx := context.Background()
+	tx, err := s.repo.DB.Begin(ctx)
+	if err != nil {
+		return "", "", err
+	}
+	defer tx.Rollback(ctx)
+	claims, err := utils.ParseRefreshToken(refresh)
+	if err != nil {
+		return "", "", errors.New("Invalid refresh token")
+	}
+	profileId, err := uuid.Parse(claims["profile_id"].(string))
+	if err != nil {
+		return "", "", errors.New("Invalid refresh token")
+	}
+	tokenId, err := uuid.Parse(claims["token_id"].(string))
+	if err != nil {
+		return "", "", errors.New("Invalid refresh token")
+	}
+	access, err := utils.GenerateAccessToken(profileId)
+	if err != nil {
+		return "", "", err
+	}
+	newRefreshID := uuid.New()
+	expTime, tokenStr, err := utils.GenerateRefreshToken(profileId, newRefreshID)
+	if err != nil {
+		return "", "", err
+	}
+	newRefreshToken := models.RefreshToken{
+		RefreshTokenID: newRefreshID,
+		ProfileID:      profileId,
+		RefreshToken:   tokenStr,
+		ExpiresAt:      expTime,
+	}
+
+	err = s.repo.DeleteRefreshToken(ctx, tx, tokenId)
+	if err != nil {
+		return "", "", err
+	}
+
+	err = s.repo.SaveRefreshToken(ctx, tx, newRefreshToken.ProfileID, newRefreshToken.RefreshTokenID, newRefreshToken.RefreshToken, expTime)
+	if err != nil {
+		return "", "", err
+	}
+	return access, newRefreshToken.RefreshToken, tx.Commit(ctx)
 }

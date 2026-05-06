@@ -28,3 +28,17 @@ func GenerateRefreshToken(profileID, refreshID uuid.UUID) (time.Time, string, er
 	tokenStr, err := token.SignedString(getJWTSecret())
 	return expTime, tokenStr, err
 }
+
+func ParseRefreshToken(tokenStr string) (jwt.MapClaims, error) {
+	token, err := jwt.Parse(tokenStr, func(token *jwt.Token) (interface{}, error) { return getJWTSecret(), nil })
+	if err != nil {
+		return nil, err
+	}
+	if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+		return nil, err
+	}
+	if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
+		return claims, nil
+	}
+	return nil, err
+}
