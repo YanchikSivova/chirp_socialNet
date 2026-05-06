@@ -302,3 +302,56 @@ func (s *AuthService) LogoutAll(profile_id uuid.UUID) error {
 	}
 	return tx.Commit(ctx)
 }
+
+func (s *AuthService) ChangeEmail(oldEmail, newEmail, password string) error {
+	ctx := context.Background()
+	tx, err := s.repo.DB.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	cred, err := s.repo.GetCredentialsByEmail(ctx, tx, oldEmail)
+	if err != nil {
+		return err
+	}
+	if ok := utils.CheckPasswordHash(password, cred.HashedPassword); !ok {
+		return errors.New("Invalid password")
+	}
+	exists, err := s.repo.EmailExists(ctx, newEmail)
+	if err != nil {
+		return err
+	}
+	if exists {
+		return errors.New("Email already exists")
+	}
+	err = s.repo.DeleteEmailChangeByCreds(ctx, tx, cred.CredentialsID)
+	if err != nil {
+		return err
+	}
+	emailChangeID := uuid.New()
+	err = s.repo.SaveEmailChange(ctx, tx, emailChangeID, cred.CredentialsID, newEmail)
+	if err != nil {
+		return err
+	}
+	err = s.repo.DeleteVerification(ctx, tx, cred.CredentialsID)
+	if err != nil {
+		return err
+	}
+
+	newVerif := models.Verification{
+		VerificationID: uuid.New(),
+		CredentialsID:  cred.CredentialsID,
+		Code:           utils.GenerateCode(),
+		ExpiresAt:      time.Now().Add(5 * time.Minute),
+	}
+
+	err = s.repo.CreateVerification(ctx, tx, newVerif)
+	if err != nil {
+		return err
+	}
+	err = mail.SendVerificationEmail(newEmail, newVerif.Code)
+	if err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}

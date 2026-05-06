@@ -150,3 +150,15 @@ func (r *AuthRepository) DeleteRefreshByProfile(ctx context.Context, tx pgx.Tx, 
 	_, err := tx.Exec(ctx, `DELETE FROM refresh_token WHERE profile_id=$1`, profileID)
 	return err
 }
+
+// Отчистить email_change по creds_id
+func (r *AuthRepository) DeleteEmailChangeByCreds(ctx context.Context, tx pgx.Tx, credID uuid.UUID) error {
+	_, err := tx.Exec(ctx, `DELETE FROM email_change WHERE credentials_id = $1`, credID)
+	return err
+}
+
+// Создать email_change
+func (r *AuthRepository) SaveEmailChange(ctx context.Context, tx pgx.Tx, EmailChangeID, credID uuid.UUID, newEmail string) error {
+	_, err := tx.Exec(ctx, `INSERT INTO email_change (email_change_id, credentials_id, new_email) VALUES ($1, $2, $3)`, EmailChangeID, credID, newEmail)
+	return err
+}

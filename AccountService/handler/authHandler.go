@@ -198,3 +198,25 @@ func (h *AuthHandler) LogoutAll(c *gin.Context) {
 		Success: true,
 	})
 }
+
+type ChangeEmailRequest struct {
+	OldEmail string `json:"old_email" binding:"required"`
+	NewEmail string `json:"new_email" binding:"required"`
+	Password string `json:"password" binding:"required"`
+}
+
+func (h *AuthHandler) ChangeEmail(c *gin.Context) {
+	var req ChangeEmailRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	err := h.service.ChangeEmail(req.OldEmail, req.NewEmail, req.Password)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, SuccessResponse{
+		Success: true,
+	})
+}

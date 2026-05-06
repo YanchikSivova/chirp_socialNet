@@ -53,3 +53,17 @@ create table if not exists blacklist(
     foreign key (profile_id) references profile(profile_id) on delete cascade,
     foreign key(banned_profile_id) references profile(profile_id) on delete cascade
 );
+
+create table if not exists email_change(
+    email_change_id uuid primary key,
+    credentials_id uuid unique not null,
+    new_email text not null,
+    foreign key (credentials_id) references credentials(credentials_id) on delete cascade
+);
+
+create table if not exists password_change(
+    password_change_id uuid primary key,
+    credentials_id uuid unique not null,
+    new_password_hash text not null,
+    foreign key (credentials_id) references credentials(credentials_id) on delete cascade
+);
