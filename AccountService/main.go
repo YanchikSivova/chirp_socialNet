@@ -31,6 +31,10 @@ func main() {
 	router.POST("/auth/logout-all", handler.LogoutAll)
 	router.POST("/auth/change-email/request", handler.ChangeEmail)
 	router.POST("/auth/change-email/confirm", handler.ChangeEmailConfirm)
+	router.POST("/auth/change-password/request", handler.ChangePassword)
+	router.POST("/auth/change-password/confirm", handler.ChangePasswordConfirm)
+	router.POST("/auth/reset-password/request", handler.ResetPasswordRequest)
+	router.POST("/auth/reset-password/confirm", handler.ResetPasswordConfirm)
 
 	router.Run(":8080")
 

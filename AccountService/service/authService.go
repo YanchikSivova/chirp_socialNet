@@ -61,7 +61,7 @@ func (s *AuthService) Register(email, password string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	token, err := utils.GenerateRegisterToken(email)
+	token, err := utils.GenerateTemporaryToken(email)
 	if err != nil {
 		return "", err
 	}
@@ -104,7 +104,7 @@ func (s *AuthService) ResetVerification(email string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	token, err := utils.GenerateRegisterToken(email)
+	token, err := utils.GenerateTemporaryToken(email)
 	if err != nil {
 		return "", err
 	}
@@ -394,6 +394,176 @@ func (s *AuthService) ChangeEmailConfirm(profileID uuid.UUID, code string) error
 		return err
 	}
 	err = s.repo.DeleteEmailChangeByCreds(ctx, tx, cred.CredentialsID)
+	if err != nil {
+		return err
+	}
+	err = s.repo.DeleteVerification(ctx, tx, cred.CredentialsID)
+	if err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
+func (s *AuthService) ChangePassword(profileID uuid.UUID, oldPassword, newPassword string) error {
+	ctx := context.Background()
+	tx, err := s.repo.DB.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	cred, err := s.repo.GetCredentialsByProfile(ctx, tx, profileID)
+	if err != nil {
+		return err
+	}
+	if ok := utils.CheckPasswordHash(oldPassword, cred.HashedPassword); !ok {
+		return errors.New("Invalid old password")
+	}
+	newPasswordHash, err := utils.HashPassword(newPassword)
+	if err != nil {
+		return err
+	}
+	err = s.repo.DeletePasswordChangeByCreds(ctx, tx, cred.CredentialsID)
+	if err != nil {
+		return err
+	}
+	passwordChangeID := uuid.New()
+	err = s.repo.SavePasswordChange(ctx, tx, passwordChangeID, cred.CredentialsID, newPasswordHash)
+	if err != nil {
+		return err
+	}
+	err = s.repo.DeleteVerification(ctx, tx, cred.CredentialsID)
+	if err != nil {
+		return err
+	}
+
+	newVerif := models.Verification{
+		VerificationID: uuid.New(),
+		CredentialsID:  cred.CredentialsID,
+		Code:           utils.GenerateCode(),
+		ExpiresAt:      time.Now().Add(5 * time.Minute),
+	}
+
+	err = s.repo.CreateVerification(ctx, tx, newVerif)
+	if err != nil {
+		return err
+	}
+	err = mail.SendVerificationEmail(cred.Email, newVerif.Code)
+	if err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
+func (s *AuthService) ChangePasswordConfirm(profileID uuid.UUID, code string) error {
+	ctx := context.Background()
+	tx, err := s.repo.DB.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	cred, err := s.repo.GetCredentialsByProfile(ctx, tx, profileID)
+	if err != nil {
+		return err
+	}
+	verif, err := s.repo.GetVerificationByCredentialsID(ctx, tx, cred.CredentialsID)
+	if err != nil {
+		return err
+	}
+	if verif.Code != code {
+		return errors.New("Verification code does not match")
+	}
+	if time.Now().After(verif.ExpiresAt) {
+		return errors.New("Code expired")
+	}
+	changePassword, err := s.repo.GetPasswordChange(ctx, tx, cred.CredentialsID)
+	if err != nil {
+		return err
+	}
+	err = s.repo.ChangePassword(ctx, tx, cred.CredentialsID, changePassword.NewPasswordHash)
+	if err != nil {
+		return err
+	}
+	err = s.repo.DeletePasswordChangeByCreds(ctx, tx, cred.CredentialsID)
+	if err != nil {
+		return err
+	}
+	err = s.repo.DeleteVerification(ctx, tx, cred.CredentialsID)
+	if err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
+func (s *AuthService) ResetPasswordRequest(email string) (string, error) {
+	ctx := context.Background()
+	tx, err := s.repo.DB.Begin(ctx)
+	if err != nil {
+		return "", err
+	}
+	defer tx.Rollback(ctx)
+
+	cred, err := s.repo.GetCredentialsByEmail(ctx, tx, email)
+	if err != nil {
+		return "", err
+	}
+	verif := models.Verification{
+		VerificationID: uuid.New(),
+		CredentialsID:  cred.CredentialsID,
+		Code:           utils.GenerateCode(),
+		ExpiresAt:      time.Now().Add(5 * time.Minute),
+	}
+	err = s.repo.DeleteVerification(ctx, tx, cred.CredentialsID)
+	if err != nil {
+		return "", err
+	}
+	err = s.repo.CreateVerification(ctx, tx, verif)
+	if err != nil {
+		return "", err
+	}
+	err = mail.SendVerificationEmail(email, verif.Code)
+	if err != nil {
+		return "", err
+	}
+	token, err := utils.GenerateTemporaryToken(email)
+	if err != nil {
+		return "", err
+	}
+	return token, tx.Commit(ctx)
+}
+
+func (s *AuthService) ResetPasswordConfirm(token, code, newPassword string) error {
+	ctx := context.Background()
+	tx, err := s.repo.DB.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	claims, err := utils.ParseTemporaryToken(token)
+	if err != nil {
+		return err
+	}
+	email := claims["email"].(string)
+	cred, err := s.repo.GetCredentialsByEmail(ctx, tx, email)
+	if err != nil {
+		return err
+	}
+	verif, err := s.repo.GetVerificationByCredentialsID(ctx, tx, cred.CredentialsID)
+	if err != nil {
+		return err
+	}
+	if verif.Code != code {
+		return errors.New("Verification code does not match")
+	}
+	if time.Now().After(verif.ExpiresAt) {
+		return errors.New("Code expired")
+	}
+	newPasswordHash, err := utils.HashPassword(newPassword)
+	if err != nil {
+		return err
+	}
+	err = s.repo.ChangePassword(ctx, tx, cred.CredentialsID, newPasswordHash)
 	if err != nil {
 		return err
 	}

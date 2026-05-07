@@ -194,3 +194,32 @@ func (r *AuthRepository) ChangeEmail(ctx context.Context, tx pgx.Tx, credID uuid
 	_, err := tx.Exec(ctx, `UPDATE credentials SET email=$1 WHERE credentials_id=$2`, newEmail, credID)
 	return err
 }
+
+// Создать password change
+func (r *AuthRepository) SavePasswordChange(ctx context.Context, tx pgx.Tx, passwordChangeID, credID uuid.UUID, newPasswordHash string) error {
+	_, err := tx.Exec(ctx, `INSERT INTO password_change (password_change_id, credentials_id, new_password_hash) VALUES ($1, $2, $3)`, passwordChangeID, credID, newPasswordHash)
+	return err
+}
+
+// Очистите password change
+func (r *AuthRepository) DeletePasswordChangeByCreds(ctx context.Context, tx pgx.Tx, credID uuid.UUID) error {
+	_, err := tx.Exec(ctx, `DELETE FROM password_change WHERE credentials_id = $1`, credID)
+	return err
+}
+
+// Получить хэш нового пароля по credentials_id
+func (r *AuthRepository) GetPasswordChange(ctx context.Context, tx pgx.Tx, credID uuid.UUID) (*models.PasswordChange, error) {
+	row := tx.QueryRow(ctx, `SELECT password_change_id, credentials_id, new_password_hash FROM password_change WHERE credentials_id=$1`, credID)
+	var passwordChange models.PasswordChange
+	err := row.Scan(
+		&passwordChange.PasswordChangeID,
+		&passwordChange.CredentialsID,
+		&passwordChange.NewPasswordHash)
+	return &passwordChange, err
+}
+
+// Сменить пароль
+func (r *AuthRepository) ChangePassword(ctx context.Context, tx pgx.Tx, credID uuid.UUID, newPasswordHash string) error {
+	_, err := tx.Exec(ctx, `UPDATE credentials SET hashed_password=$1 WHERE credentials_id=$2`, newPasswordHash, credID)
+	return err
+}

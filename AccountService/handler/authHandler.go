@@ -14,7 +14,7 @@ type AuthRequest struct {
 	Password string `json:"password" binding:"required"`
 }
 
-type RegisterResponse struct {
+type SuccessWithTokenResponse struct {
 	Token   string `json:"token"`
 	Success bool   `json:"success"`
 }
@@ -48,7 +48,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusCreated, RegisterResponse{
+	c.JSON(http.StatusCreated, SuccessWithTokenResponse{
 		Token:   token,
 		Success: true,
 	})
@@ -61,7 +61,7 @@ func (h *AuthHandler) VerifyEmail(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	claims, err := utils.ParseRegisterToken(req.Token)
+	claims, err := utils.ParseTemporaryToken(req.Token)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -80,7 +80,7 @@ func (h *AuthHandler) VerifyEmail(c *gin.Context) {
 	})
 }
 
-type ResendVerificationEmailRequest struct {
+type EmailRequest struct {
 	Email string `json:"email" binding:"required"`
 }
 
@@ -90,7 +90,7 @@ type ResendVerificationEmailResponse struct {
 }
 
 func (h *AuthHandler) ResendVerificationEmail(c *gin.Context) {
-	var req ResendVerificationEmailRequest
+	var req EmailRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -251,6 +251,103 @@ func (h *AuthHandler) ChangeEmailConfirm(c *gin.Context) {
 		return
 	}
 	err = h.service.ChangeEmailConfirm(profileID, req.Code)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, SuccessResponse{
+		Success: true,
+	})
+}
+
+type ChangePasswordRequest struct {
+	OldPassword string `json:"old_password" binding:"required"`
+	NewPassword string `json:"new_password" binding:"required"`
+}
+
+func (h *AuthHandler) ChangePassword(c *gin.Context) {
+	var req ChangePasswordRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	profileIdStr := c.GetHeader("X-User-Id")
+	if profileIdStr == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "no profile_id provided"})
+		return
+	}
+	profileID, err := uuid.Parse(profileIdStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	err = h.service.ChangePassword(profileID, req.OldPassword, req.NewPassword)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, SuccessResponse{
+		Success: true,
+	})
+}
+
+func (h *AuthHandler) ChangePasswordConfirm(c *gin.Context) {
+	var req VerifyCodeRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	profileIdStr := c.GetHeader("X-User-Id")
+	if profileIdStr == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "no profile_id provided"})
+		return
+	}
+	profileID, err := uuid.Parse(profileIdStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	err = h.service.ChangePasswordConfirm(profileID, req.Code)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, SuccessResponse{
+		Success: true,
+	})
+}
+
+func (h *AuthHandler) ResetPasswordRequest(c *gin.Context) {
+	var req EmailRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	token, err := h.service.ResetPasswordRequest(req.Email)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, SuccessWithTokenResponse{
+		Success: true,
+		Token:   token,
+	})
+}
+
+type ResetPasswordConfirmRequest struct {
+	NewPassword string `json:"new_password" binding:"required"`
+	Token       string `json:"token" binding:"required"`
+	Code        string `json:"code" binding:"required"`
+}
+
+func (h *AuthHandler) ResetPasswordConfirm(c *gin.Context) {
+	var req ResetPasswordConfirmRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	err := h.service.ResetPasswordConfirm(req.Token, req.Code, req.NewPassword)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
