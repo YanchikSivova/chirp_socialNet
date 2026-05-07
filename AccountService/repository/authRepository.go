@@ -162,3 +162,35 @@ func (r *AuthRepository) SaveEmailChange(ctx context.Context, tx pgx.Tx, EmailCh
 	_, err := tx.Exec(ctx, `INSERT INTO email_change (email_change_id, credentials_id, new_email) VALUES ($1, $2, $3)`, EmailChangeID, credID, newEmail)
 	return err
 }
+
+// Получить credentials по profile_id
+func (r *AuthRepository) GetCredentialsByProfile(ctx context.Context, tx pgx.Tx, profileID uuid.UUID) (*models.Credentials, error) {
+	row := tx.QueryRow(ctx, `SELECT credentials_id, profile_id, email, hashed_password, created_at, status FROM credentials WHERE profile_id = $1`, profileID)
+	var cred models.Credentials
+	err := row.Scan(
+		&cred.CredentialsID,
+		&cred.ProfileID,
+		&cred.Email,
+		&cred.HashedPassword,
+		&cred.CreatedAt,
+		&cred.Status,
+	)
+	return &cred, err
+}
+
+// Получить новый email по credentials_id
+func (r *AuthRepository) GetEmailChange(ctx context.Context, tx pgx.Tx, credID uuid.UUID) (*models.EmailChange, error) {
+	row := tx.QueryRow(ctx, `SELECT email_change_id, credentials_id, new_email FROM email_change WHERE credentials_id = $1`, credID)
+	var emailChange models.EmailChange
+	err := row.Scan(
+		&emailChange.EmailChangeID,
+		&emailChange.CredentialsID,
+		&emailChange.NewEmail)
+	return &emailChange, err
+}
+
+// Сменить email
+func (r *AuthRepository) ChangeEmail(ctx context.Context, tx pgx.Tx, credID uuid.UUID, newEmail string) error {
+	_, err := tx.Exec(ctx, `UPDATE credentials SET email=$1 WHERE credentials_id=$2`, newEmail, credID)
+	return err
+}

@@ -303,14 +303,14 @@ func (s *AuthService) LogoutAll(profile_id uuid.UUID) error {
 	return tx.Commit(ctx)
 }
 
-func (s *AuthService) ChangeEmail(oldEmail, newEmail, password string) error {
+func (s *AuthService) ChangeEmail(profileID uuid.UUID, newEmail, password string) error {
 	ctx := context.Background()
 	tx, err := s.repo.DB.Begin(ctx)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback(ctx)
-	cred, err := s.repo.GetCredentialsByEmail(ctx, tx, oldEmail)
+	cred, err := s.repo.GetCredentialsByProfile(ctx, tx, profileID)
 	if err != nil {
 		return err
 	}
@@ -350,6 +350,54 @@ func (s *AuthService) ChangeEmail(oldEmail, newEmail, password string) error {
 		return err
 	}
 	err = mail.SendVerificationEmail(newEmail, newVerif.Code)
+	if err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
+func (s *AuthService) ChangeEmailConfirm(profileID uuid.UUID, code string) error {
+	ctx := context.Background()
+	tx, err := s.repo.DB.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	cred, err := s.repo.GetCredentialsByProfile(ctx, tx, profileID)
+	if err != nil {
+		return err
+	}
+	verif, err := s.repo.GetVerificationByCredentialsID(ctx, tx, cred.CredentialsID)
+	if err != nil {
+		return err
+	}
+	if verif.Code != code {
+		return errors.New("Verification code does not match")
+	}
+	if time.Now().After(verif.ExpiresAt) {
+		return errors.New("Code expired")
+	}
+	emailChange, err := s.repo.GetEmailChange(ctx, tx, cred.CredentialsID)
+	if err != nil {
+		return err
+	}
+	exists, err := s.repo.EmailExists(ctx, emailChange.NewEmail)
+	if err != nil {
+		return err
+	}
+	if exists {
+		return errors.New("Email already exists")
+	}
+	err = s.repo.ChangeEmail(ctx, tx, cred.CredentialsID, emailChange.NewEmail)
+	if err != nil {
+		return err
+	}
+	err = s.repo.DeleteEmailChangeByCreds(ctx, tx, cred.CredentialsID)
+	if err != nil {
+		return err
+	}
+	err = s.repo.DeleteVerification(ctx, tx, cred.CredentialsID)
 	if err != nil {
 		return err
 	}

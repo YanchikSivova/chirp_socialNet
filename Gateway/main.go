@@ -24,13 +24,13 @@ func main() {
 		publicAuth.POST("/login", proxy.ProxyHandler(accountProxy))
 		publicAuth.POST("/refresh", proxy.ProxyHandler(accountProxy))
 		publicAuth.POST("/refresh/logout", proxy.ProxyHandler(accountProxy))
-		publicAuth.POST("/change-email/request", proxy.ProxyHandler(accountProxy))
 	}
 
 	protectedAuth := r.Group("/auth")
 	protectedAuth.Use(middleware.AuthMiddleware())
 	{
 		protectedAuth.POST("/logout-all", proxy.ProxyHandler(accountProxy))
+		protectedAuth.POST("/change-email/*path", proxy.ProxyHandler(accountProxy))
 
 	}
 	//PROTECTED routes

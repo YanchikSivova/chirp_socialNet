@@ -200,7 +200,6 @@ func (h *AuthHandler) LogoutAll(c *gin.Context) {
 }
 
 type ChangeEmailRequest struct {
-	OldEmail string `json:"old_email" binding:"required"`
 	NewEmail string `json:"new_email" binding:"required"`
 	Password string `json:"password" binding:"required"`
 }
@@ -211,7 +210,47 @@ func (h *AuthHandler) ChangeEmail(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	err := h.service.ChangeEmail(req.OldEmail, req.NewEmail, req.Password)
+	profileIdStr := c.GetHeader("X-User-Id")
+	if profileIdStr == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "no profile_id provided"})
+		return
+	}
+	profileID, err := uuid.Parse(profileIdStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	err = h.service.ChangeEmail(profileID, req.NewEmail, req.Password)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, SuccessResponse{
+		Success: true,
+	})
+}
+
+type VerifyCodeRequest struct {
+	Code string `json:"code" binding:"required"`
+}
+
+func (h *AuthHandler) ChangeEmailConfirm(c *gin.Context) {
+	var req VerifyCodeRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	profileIdStr := c.GetHeader("X-User-Id")
+	if profileIdStr == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "no profile_id provided"})
+		return
+	}
+	profileID, err := uuid.Parse(profileIdStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	err = h.service.ChangeEmailConfirm(profileID, req.Code)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
