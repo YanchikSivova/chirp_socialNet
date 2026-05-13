@@ -18,9 +18,9 @@ func NewAuthRepository(DB *pgxpool.Pool) *AuthRepository {
 	return &AuthRepository{DB: DB}
 }
 
-func (r *AuthRepository) EmailExists(ctx context.Context, email string) (bool, error) {
+func (r *AuthRepository) EmailExists(ctx context.Context, tx pgx.Tx, email string) (bool, error) {
 	var exists bool
-	err := r.DB.QueryRow(ctx,
+	err := tx.QueryRow(ctx,
 		`SELECT EXISTS(SELECT 1 FROM credentials WHERE email = $1)`, email).Scan(&exists)
 	return exists, err
 }
@@ -41,32 +41,6 @@ func (r *AuthRepository) CreateVerification(ctx context.Context, tx pgx.Tx, v mo
 func (r *AuthRepository) DeleteVerification(ctx context.Context, tx pgx.Tx, id uuid.UUID) error {
 	_, err := tx.Exec(ctx, `DELETE FROM verification WHERE credentials_id = $1`, id)
 	return err
-}
-
-// Транзакция создание credentials и verification
-func (r *AuthRepository) RegisterTx(ctx context.Context, c models.Credentials, v models.Verification) error {
-	tx, err := r.DB.Begin(ctx) //транзакция
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback(ctx) //откат если упало
-
-	err = r.CreateCredentials(ctx, tx, c)
-	if err != nil {
-		return err
-	}
-
-	err = r.DeleteVerification(ctx, tx, c.CredentialsID)
-	if err != nil {
-		return err
-	}
-
-	err = r.CreateVerification(ctx, tx, v)
-	if err != nil {
-		return err
-	}
-
-	return tx.Commit(ctx) //если Commit то Rollback игнорируется
 }
 
 // Получение credentials по email

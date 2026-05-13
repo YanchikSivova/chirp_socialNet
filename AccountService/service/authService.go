@@ -9,6 +9,7 @@ import (
 	"errors"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"time"
 )
 
@@ -22,8 +23,12 @@ func NewAuthService(r *repository.AuthRepository) *AuthService {
 
 func (s *AuthService) Register(email, password string) (string, error) {
 	ctx := context.Background()
-
-	exists, err := s.repo.EmailExists(ctx, email)
+	tx, err := s.repo.DB.Begin(ctx)
+	if err != nil {
+		return "", err
+	}
+	defer tx.Rollback(ctx)
+	exists, err := s.repo.EmailExists(ctx, tx, email)
 	if err != nil {
 		return "", err
 	}
@@ -52,7 +57,17 @@ func (s *AuthService) Register(email, password string) (string, error) {
 		ExpiresAt:      time.Now().Add(5 * time.Minute),
 	}
 
-	err = s.repo.RegisterTx(ctx, cred, verif)
+	err = s.repo.CreateCredentials(ctx, tx, cred)
+	if err != nil {
+		return "", err
+	}
+
+	err = s.repo.DeleteVerification(ctx, tx, cred.CredentialsID)
+	if err != nil {
+		return "", err
+	}
+
+	err = s.repo.CreateVerification(ctx, tx, verif)
 	if err != nil {
 		return "", err
 	}
@@ -68,7 +83,29 @@ func (s *AuthService) Register(email, password string) (string, error) {
 	return token, nil
 }
 
-func (s *AuthService) ResetVerification(email string) (string, error) {
+func resendVerification(s *AuthService, credentialsID uuid.UUID, email string, ctx context.Context, tx pgx.Tx) error {
+	err := s.repo.DeleteVerification(ctx, tx, credentialsID)
+	if err != nil {
+		return err
+	}
+	newVerif := models.Verification{
+		VerificationID: uuid.New(),
+		CredentialsID:  credentialsID,
+		Code:           utils.GenerateCode(),
+		ExpiresAt:      time.Now().Add(5 * time.Minute),
+	}
+	err = s.repo.CreateVerification(ctx, tx, newVerif)
+	if err != nil {
+		return err
+	}
+	err = mail.SendVerificationEmail(email, newVerif.Code)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (s *AuthService) ResendVerificationWithToken(email string) (string, error) {
 	ctx := context.Background()
 	tx, err := s.repo.DB.Begin(ctx)
 	if err != nil {
@@ -80,35 +117,58 @@ func (s *AuthService) ResetVerification(email string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if cred.Status != "pending" {
-		return "", errors.New("Email already active")
-	}
-
-	err = s.repo.DeleteVerification(ctx, tx, cred.CredentialsID)
+	err = resendVerification(s, cred.CredentialsID, cred.Email, ctx, tx)
 	if err != nil {
 		return "", err
 	}
-
-	newVerif := models.Verification{
-		VerificationID: uuid.New(),
-		CredentialsID:  cred.CredentialsID,
-		Code:           utils.GenerateCode(),
-		ExpiresAt:      time.Now().Add(5 * time.Minute),
-	}
-
-	err = s.repo.CreateVerification(ctx, tx, newVerif)
-	if err != nil {
-		return "", err
-	}
-	err = mail.SendVerificationEmail(email, newVerif.Code)
-	if err != nil {
-		return "", err
-	}
-	token, err := utils.GenerateTemporaryToken(email)
+	token, err := utils.GenerateTemporaryToken(cred.Email)
 	if err != nil {
 		return "", err
 	}
 	return token, tx.Commit(ctx)
+}
+
+func (s *AuthService) ResendVerificationForChangeEmail(profileID uuid.UUID, newEmail string) error {
+	ctx := context.Background()
+	tx, err := s.repo.DB.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	cred, err := s.repo.GetCredentialsByProfile(ctx, tx, profileID)
+	if err != nil {
+		return err
+	}
+	changeEmail, err := s.repo.GetEmailChange(ctx, tx, cred.CredentialsID)
+	if err != nil {
+		return err
+	}
+	if newEmail != changeEmail.NewEmail {
+		return errors.New("New email does not match")
+	}
+	err = resendVerification(s, cred.CredentialsID, newEmail, ctx, tx)
+	if err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
+func (s *AuthService) ResendVerificationForChangePassword(profileID uuid.UUID) error {
+	ctx := context.Background()
+	tx, err := s.repo.DB.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	cred, err := s.repo.GetCredentialsByProfile(ctx, tx, profileID)
+	if err != nil {
+		return err
+	}
+	err = resendVerification(s, cred.CredentialsID, cred.Email, ctx, tx)
+	if err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }
 
 func (s *AuthService) VerifyEmail(email, code string) error {
@@ -317,7 +377,7 @@ func (s *AuthService) ChangeEmail(profileID uuid.UUID, newEmail, password string
 	if ok := utils.CheckPasswordHash(password, cred.HashedPassword); !ok {
 		return errors.New("Invalid password")
 	}
-	exists, err := s.repo.EmailExists(ctx, newEmail)
+	exists, err := s.repo.EmailExists(ctx, tx, newEmail)
 	if err != nil {
 		return err
 	}
@@ -382,7 +442,7 @@ func (s *AuthService) ChangeEmailConfirm(profileID uuid.UUID, code string) error
 	if err != nil {
 		return err
 	}
-	exists, err := s.repo.EmailExists(ctx, emailChange.NewEmail)
+	exists, err := s.repo.EmailExists(ctx, tx, emailChange.NewEmail)
 	if err != nil {
 		return err
 	}

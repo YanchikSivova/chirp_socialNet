@@ -9,6 +9,14 @@ import (
 	"net/http"
 )
 
+type AuthHandler struct {
+	service *service.AuthService
+}
+
+func NewAuthHandler(s *service.AuthService) *AuthHandler {
+	return &AuthHandler{service: s}
+}
+
 type AuthRequest struct {
 	Email    string `json:"email" binding:"required"`
 	Password string `json:"password" binding:"required"`
@@ -26,14 +34,6 @@ type VerifyEmailRequest struct {
 
 type SuccessResponse struct {
 	Success bool `json:"success"`
-}
-
-type AuthHandler struct {
-	service *service.AuthService
-}
-
-func NewAuthHandler(s *service.AuthService) *AuthHandler {
-	return &AuthHandler{service: s}
 }
 
 func (h *AuthHandler) Register(c *gin.Context) {
@@ -89,19 +89,71 @@ type ResendVerificationEmailResponse struct {
 	Success bool   `json:"success"`
 }
 
-func (h *AuthHandler) ResendVerificationEmail(c *gin.Context) {
+func (h *AuthHandler) ResendVerificationWithToken(c *gin.Context) {
 	var req EmailRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	token, err := h.service.ResetVerification(req.Email)
+	token, err := h.service.ResendVerificationWithToken(req.Email)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 	c.JSON(http.StatusOK, ResendVerificationEmailResponse{
 		Token:   token,
+		Success: true,
+	})
+}
+
+type NewEmailRequest struct {
+	NewEmail string `json:"new_email" binding:"required"`
+}
+
+func (h *AuthHandler) ResendVerificationForChangeEmail(c *gin.Context) {
+	var req NewEmailRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	profileIdStr := c.GetHeader("X-User-Id")
+	if profileIdStr == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "no profile id found"})
+		return
+	}
+	profileId, err := uuid.Parse(profileIdStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	err = h.service.ResendVerificationForChangeEmail(profileId, req.NewEmail)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, SuccessResponse{
+		Success: true,
+	})
+
+}
+
+func (h *AuthHandler) ResendVerificationForChangePassword(c *gin.Context) {
+	profileIdStr := c.GetHeader("X-User-Id")
+	if profileIdStr == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "no profile id found"})
+		return
+	}
+	profileId, err := uuid.Parse(profileIdStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	err = h.service.ResendVerificationForChangePassword(profileId)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, SuccessResponse{
 		Success: true,
 	})
 }
