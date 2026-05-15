@@ -67,3 +67,60 @@ create table if not exists password_change(
     new_password_hash text not null,
     foreign key (credentials_id) references credentials(credentials_id) on delete cascade
 );
+
+--Обновление количества подписчиков и подписок после подписки/отписки
+create or replace function update_subscription_counts()
+returns trigger as $$
+begin
+if TG_OP = 'INSERT' THEN
+    UPDATE profile
+    SET subscribed_amount = subscribed_amount+1
+    WHERE profile_id = NEW.subscriber_id;
+
+    UPDATE profile
+    SET subscribers_amount = subscribers_amount+1
+    WHERE profile_id = NEW.subscribed_id;
+
+    RETURN NEW;
+ELSIF TG_OP = 'DELETE' THEN
+    UPDATE profile
+    SET subscribed_amount = subscribed_amount-1
+    WHERE profile_id = OLD.subscriber_id;
+
+    UPDATE profile
+    SET subscribers_amount = subscribers_amount-1
+    WHERE profile_id = OLD.subscribed_id;
+
+    RETURN OLD;
+END IF;
+
+RETURN NULL;
+END;
+
+$$ LANGUAGE plpgsql;
+
+-- Отписки после добавления в черный список
+CREATE TRIGGER trigger_subscription_counts
+AFTER INSERT OR DELETE ON subscription
+FOR EACH ROW
+EXECUTE FUNCTION update_subscription_counts();
+
+CREATE OR REPLACE FUNCTION handle_blacklist_insert()
+RETURNS TRIGGER AS $$
+BEGIN
+    DELETE FROM subscription
+    WHERE subscriber_id = NEW.banned_profile_id
+    AND subscribed_id = NEW.profile_id;
+
+    DELETE FROM subscription
+    WHERE subscriber_id = NEW.profile_id
+    AND subscribed_id = NEW.banned_profile_id;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trigger_blacklist_insert
+AFTER INSERT ON blacklist
+FOR EACH ROW
+EXECUTE FUNCTION handle_blacklist_insert();

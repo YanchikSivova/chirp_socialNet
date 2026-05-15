@@ -83,7 +83,7 @@ func (r *UsersRepository) Follow(ctx context.Context, tx pgx.Tx, subscriberID, s
 	return err
 }
 
-func (r *UsersRepository) UpdateFollowersAmount(ctx context.Context, tx pgx.Tx, profileID uuid.UUID) error {
+/*func (r *UsersRepository) UpdateFollowersAmount(ctx context.Context, tx pgx.Tx, profileID uuid.UUID) error {
 	_, err := tx.Exec(ctx, `UPDATE profile SET subscribers_amount = (SELECT COUNT(*) FROM subscription WHERE subscribed_id=$1) WHERE profile_id = $1`, profileID)
 	return err
 }
@@ -91,7 +91,7 @@ func (r *UsersRepository) UpdateFollowersAmount(ctx context.Context, tx pgx.Tx, 
 func (r *UsersRepository) UpdateFollowingsAmount(ctx context.Context, tx pgx.Tx, profileID uuid.UUID) error {
 	_, err := tx.Exec(ctx, `UPDATE profile SET subscribed_amount = (SELECT COUNT(*) FROM subscription WHERE subscriber_id=$1) WHERE profile_id = $1`, profileID)
 	return err
-}
+}*/
 
 func (r *UsersRepository) Unfollow(ctx context.Context, tx pgx.Tx, subscriberID, subscribedID uuid.UUID) error {
 	_, err := tx.Exec(ctx, `DELETE FROM subscription WHERE subscriber_id=$1 AND subscribed_id=$2`, subscriberID, subscribedID)
@@ -191,4 +191,68 @@ func (r *UsersRepository) GetBlacklist(ctx context.Context, tx pgx.Tx, profileId
 		return nil, err
 	}
 	return blacklist, nil
+}
+
+func (r *UsersRepository) SearchByName(ctx context.Context, tx pgx.Tx, name string, limit int, offset int) ([]models.ProfileMinimum, error) {
+	var profiles []models.ProfileMinimum
+	searchName := "%" + name + "%"
+	rows, err := tx.Query(ctx, `SELECT profile_id, name, username, avatar FROM profile WHERE name LIKE $1 LIMIT $2 OFFSET $3`, searchName, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var profile models.ProfileMinimum
+		err = rows.Scan(
+			&profile.ProfileID,
+			&profile.Name,
+			&profile.Username,
+			&profile.Avatar,
+		)
+		if err != nil {
+			return nil, err
+		}
+		profiles = append(profiles, profile)
+	}
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+	return profiles, nil
+}
+
+func (r *UsersRepository) SearchByUsername(ctx context.Context, tx pgx.Tx, username string, limit int, offset int) ([]models.ProfileMinimum, error) {
+	var profiles []models.ProfileMinimum
+	searchUsername := "%" + username + "%"
+	rows, err := tx.Query(ctx, `SELECT profile_id, name, username, avatar FROM profile WHERE username LIKE $1 LIMIT $2 OFFSET $3`, searchUsername, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var profile models.ProfileMinimum
+		err = rows.Scan(
+			&profile.ProfileID,
+			&profile.Name,
+			&profile.Username,
+			&profile.Avatar,
+		)
+		if err != nil {
+			return nil, err
+		}
+		profiles = append(profiles, profile)
+	}
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+	return profiles, nil
+}
+
+func (r *UsersRepository) GetProfileByCredentials(ctx context.Context, tx pgx.Tx, credId uuid.UUID) (*uuid.UUID, error) {
+	var profileId *uuid.UUID
+	row := tx.QueryRow(ctx, `SELECT profile_id FROM credentials WHERE credentials_id=$1`, credId)
+	err := row.Scan(&profileId)
+	if err != nil {
+		return nil, err
+	}
+	return profileId, nil
 }

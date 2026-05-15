@@ -197,3 +197,13 @@ func (r *AuthRepository) ChangePassword(ctx context.Context, tx pgx.Tx, credID u
 	_, err := tx.Exec(ctx, `UPDATE credentials SET hashed_password=$1 WHERE credentials_id=$2`, newPasswordHash, credID)
 	return err
 }
+
+func (r *AuthRepository) DeleteCredentials(ctx context.Context, tx pgx.Tx, credID uuid.UUID) error {
+	_, err := tx.Exec(ctx, `DELETE FROM credentials WHERE credentials_id=$1`, credID)
+	return err
+}
+
+func (r *AuthRepository) DeleteProfile(ctx context.Context, tx pgx.Tx, profileID uuid.UUID) error {
+	_, err := tx.Exec(ctx, `DELETE FROM profile WHERE profile_id=$1`, profileID)
+	return err
+}

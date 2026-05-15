@@ -155,32 +155,19 @@ func (s *UsersService) Follow(subscriberID, subscribedID uuid.UUID) error {
 	}
 	defer tx.Rollback(ctx)
 
-	subscriberIsBlocked, err := s.repo.CheckIsBlocked(ctx, tx, subscriberID, subscribedID)
-	if err != nil {
-		return err
-	}
-	if subscriberIsBlocked {
-		return errors.New("your profile is blocked")
-	}
-	subscribedIsBlocked, err := s.repo.CheckIsBlocked(ctx, tx, subscribedID, subscriberID)
-	if err != nil {
-		return err
-	}
-	if subscribedIsBlocked {
-		return errors.New("profile is blocked")
-	}
 	err = s.repo.Follow(ctx, tx, subscriberID, subscribedID)
 	if err != nil {
 		return err
 	}
-	err = s.repo.UpdateFollowersAmount(ctx, tx, subscribedID)
+
+	/*err = s.repo.UpdateFollowersAmount(ctx, tx, subscribedID)
 	if err != nil {
 		return err
 	}
 	err = s.repo.UpdateFollowingsAmount(ctx, tx, subscriberID)
 	if err != nil {
 		return err
-	}
+	}*/
 	return tx.Commit(ctx)
 }
 
@@ -195,14 +182,15 @@ func (s *UsersService) Unfollow(subscriberID, subscribedID uuid.UUID) error {
 	if err != nil {
 		return err
 	}
-	err = s.repo.UpdateFollowersAmount(ctx, tx, subscribedID)
+
+	/*err = s.repo.UpdateFollowersAmount(ctx, tx, subscribedID)
 	if err != nil {
 		return err
 	}
 	err = s.repo.UpdateFollowingsAmount(ctx, tx, subscriberID)
 	if err != nil {
 		return err
-	}
+	}*/
 	return tx.Commit(ctx)
 }
 
@@ -213,48 +201,36 @@ func (s *UsersService) Block(bannedProfileId, profileId uuid.UUID) error {
 		return err
 	}
 	defer tx.Rollback(ctx)
-	profileIsCompleted, err := s.repo.CheckProfileCompleted(ctx, tx, profileId)
-	if err != nil {
-		return err
-	}
-	if !profileIsCompleted {
-		return errors.New("profile is not completed")
-	}
-	bannedProfileCompleted, err := s.repo.CheckProfileCompleted(ctx, tx, bannedProfileId)
-	if err != nil {
-		return err
-	}
-	if !bannedProfileCompleted {
-		return errors.New("banned profile is not completed")
-	}
+
 	err = s.repo.Block(ctx, tx, bannedProfileId, profileId)
 	if err != nil {
 		return err
 	}
-	err = s.repo.Unfollow(ctx, tx, profileId, bannedProfileId)
-	if err != nil {
-		return err
-	}
-	err = s.repo.Unfollow(ctx, tx, bannedProfileId, profileId)
-	if err != nil {
-		return err
-	}
-	err = s.repo.UpdateFollowersAmount(ctx, tx, bannedProfileId)
-	if err != nil {
-		return err
-	}
-	err = s.repo.UpdateFollowersAmount(ctx, tx, profileId)
-	if err != nil {
-		return err
-	}
-	err = s.repo.UpdateFollowingsAmount(ctx, tx, bannedProfileId)
-	if err != nil {
-		return err
-	}
-	err = s.repo.UpdateFollowingsAmount(ctx, tx, profileId)
-	if err != nil {
-		return err
-	}
+
+	//err = s.repo.Unfollow(ctx, tx, profileId, bannedProfileId)
+	//if err != nil {
+	//	return err
+	//}
+	//err = s.repo.Unfollow(ctx, tx, bannedProfileId, profileId)
+	//if err != nil {
+	//	return err
+	//}
+	//err = s.repo.UpdateFollowersAmount(ctx, tx, bannedProfileId)
+	//if err != nil {
+	//	return err
+	//}
+	//err = s.repo.UpdateFollowersAmount(ctx, tx, profileId)
+	//if err != nil {
+	//	return err
+	//}
+	//err = s.repo.UpdateFollowingsAmount(ctx, tx, bannedProfileId)
+	//if err != nil {
+	//	return err
+	//}
+	//err = s.repo.UpdateFollowingsAmount(ctx, tx, profileId)
+	//if err != nil {
+	//	return err
+	//}
 	return tx.Commit(ctx)
 }
 
@@ -312,4 +288,32 @@ func (s *UsersService) GetBlacklist(profileId uuid.UUID, limit, offset int) ([]m
 		return nil, err
 	}
 	return blacklist, tx.Commit(ctx)
+}
+
+func (s *UsersService) SearchByName(searchName string, limit, offset int) ([]models.ProfileMinimum, error) {
+	ctx := context.Background()
+	tx, err := s.repo.DB.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx)
+	profiles, err := s.repo.SearchByName(ctx, tx, searchName, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	return profiles, tx.Commit(ctx)
+}
+
+func (s *UsersService) SearchByUsername(searchUsername string, limit, offset int) ([]models.ProfileMinimum, error) {
+	ctx := context.Background()
+	tx, err := s.repo.DB.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx)
+	profiles, err := s.repo.SearchByUsername(ctx, tx, searchUsername, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	return profiles, tx.Commit(ctx)
 }

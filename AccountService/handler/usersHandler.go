@@ -6,7 +6,6 @@ import (
 	"errors"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"log"
 	"net/http"
 	"strconv"
 )
@@ -33,7 +32,6 @@ func parseProfileHeader(c *gin.Context) (*uuid.UUID, error) {
 
 func parseProfileParam(c *gin.Context) (*uuid.UUID, error) {
 	profileIdStr := c.Param("id")
-	log.Printf("param parsed: %v", profileIdStr)
 	if profileIdStr == "" {
 		return nil, errors.New("no profile_id found")
 	}
@@ -47,7 +45,8 @@ func parseProfileParam(c *gin.Context) (*uuid.UUID, error) {
 func parseOffsetParam(c *gin.Context) (*int, error) {
 	offsetStr := c.Query("offset")
 	if offsetStr == "" {
-		return nil, errors.New("no offset found")
+		offset := 0 //Дефолтное значение
+		return &offset, nil
 	}
 	offset, err := strconv.Atoi(offsetStr)
 	if err != nil {
@@ -59,7 +58,8 @@ func parseOffsetParam(c *gin.Context) (*int, error) {
 func parseLimitParam(c *gin.Context) (*int, error) {
 	limitStr := c.Query("limit")
 	if limitStr == "" {
-		return nil, errors.New("no limit found")
+		limit := 20 //Дефолтное значение
+		return &limit, nil
 	}
 	limit, err := strconv.Atoi(limitStr)
 	if err != nil {
@@ -492,6 +492,64 @@ func (h *UsersHandler) GetBlacklist(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, ProfileSliceResponse{
 		Profiles: blacklist,
+		Limit:    *limit,
+		Offset:   *offset,
+	})
+}
+
+func (h *UsersHandler) SearchByName(c *gin.Context) {
+	name := c.Query("name")
+	if name == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "name is required"})
+		return
+	}
+	offset, err := parseOffsetParam(c)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	limit, err := parseLimitParam(c)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	profiles, err := h.service.SearchByName(name, *limit, *offset)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, ProfileSliceResponse{
+		Profiles: profiles,
+		Limit:    *limit,
+		Offset:   *offset,
+	})
+}
+
+func (h *UsersHandler) SearchByUsername(c *gin.Context) {
+	username := c.Query("username")
+	if username == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "name is required"})
+		return
+	}
+	offset, err := parseOffsetParam(c)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	limit, err := parseLimitParam(c)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	profiles, err := h.service.SearchByUsername(username, *limit, *offset)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, ProfileSliceResponse{
+		Profiles: profiles,
 		Limit:    *limit,
 		Offset:   *offset,
 	})

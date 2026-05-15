@@ -34,7 +34,7 @@ func main() {
 		protectedAuth.POST("/logout-all", proxy.ProxyHandler(accountProxy))
 		protectedAuth.POST("/change-email/*path", proxy.ProxyHandler(accountProxy))
 		protectedAuth.POST("/change-password/*path", proxy.ProxyHandler(accountProxy))
-
+		protectedAuth.POST("/me/delete/*path", proxy.ProxyHandler(accountProxy))
 	}
 	//PROTECTED routes
 	protected := r.Group("/users")

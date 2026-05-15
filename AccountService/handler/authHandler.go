@@ -408,3 +408,58 @@ func (h *AuthHandler) ResetPasswordConfirm(c *gin.Context) {
 		Success: true,
 	})
 }
+
+type PasswordRequest struct {
+	Password string `json:"password" binding:"required"`
+}
+
+func (h *AuthHandler) DeleteAccountRequest(c *gin.Context) {
+	var req PasswordRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	}
+	profileIdStr := c.GetHeader("X-User-Id")
+	if profileIdStr == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "no profile_id provided"})
+		return
+	}
+	profileID, err := uuid.Parse(profileIdStr)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		return
+	}
+	err = h.service.DeleteAccountRequest(profileID, req.Password)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, SuccessResponse{
+		Success: true,
+	})
+}
+
+func (h *AuthHandler) DeleteAccountConfirm(c *gin.Context) {
+	var req VerifyCodeRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	profileIdStr := c.GetHeader("X-User-Id")
+	if profileIdStr == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "no profile_id provided"})
+		return
+	}
+	profileID, err := uuid.Parse(profileIdStr)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		return
+	}
+	err = h.service.DeleteAccountConfirm(profileID, req.Code)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, SuccessResponse{
+		Success: true,
+	})
+}

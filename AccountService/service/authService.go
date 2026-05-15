@@ -633,3 +633,68 @@ func (s *AuthService) ResetPasswordConfirm(token, code, newPassword string) erro
 	}
 	return tx.Commit(ctx)
 }
+
+func (s *AuthService) DeleteAccountRequest(profileId uuid.UUID, password string) error {
+	ctx := context.Background()
+	tx, err := s.repo.DB.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	cred, err := s.repo.GetCredentialsByProfile(ctx, tx, profileId)
+	if err != nil {
+		return err
+	}
+	if !utils.CheckPasswordHash(password, cred.HashedPassword) {
+		return errors.New("Invalid password")
+	}
+	verif := models.Verification{
+		VerificationID: uuid.New(),
+		CredentialsID:  cred.CredentialsID,
+		Code:           utils.GenerateCode(),
+		ExpiresAt:      time.Now().Add(5 * time.Minute),
+	}
+	err = s.repo.DeleteVerification(ctx, tx, cred.CredentialsID)
+	if err != nil {
+		return err
+	}
+	err = s.repo.CreateVerification(ctx, tx, verif)
+	if err != nil {
+		return err
+	}
+	err = mail.SendVerificationEmail(cred.Email, verif.Code)
+	if err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
+func (s *AuthService) DeleteAccountConfirm(profileId uuid.UUID, code string) error {
+	ctx := context.Background()
+	tx, err := s.repo.DB.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	cred, err := s.repo.GetCredentialsByProfile(ctx, tx, profileId)
+	if err != nil {
+		return err
+	}
+	verif, err := s.repo.GetVerificationByCredentialsID(ctx, tx, cred.CredentialsID)
+	if err != nil {
+		return err
+	}
+	if verif.Code != code {
+		return errors.New("Verification code does not match")
+	}
+	err = s.repo.DeleteVerification(ctx, tx, cred.CredentialsID)
+	if err != nil {
+		return err
+	}
+	err = s.repo.DeleteCredentials(ctx, tx, cred.CredentialsID)
+	err = s.repo.DeleteProfile(ctx, tx, profileId)
+	if err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}

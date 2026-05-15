@@ -37,6 +37,8 @@ func main() {
 	router.POST("/auth/change-password/resend-verification", handlerAuth.ResendVerificationForChangePassword)
 	router.POST("/auth/reset-password/request", handlerAuth.ResetPasswordRequest)
 	router.POST("/auth/reset-password/confirm", handlerAuth.ResetPasswordConfirm)
+	router.POST("/auth/me/delete/request", handlerAuth.DeleteAccountRequest)
+	router.POST("/auth/me/delete/confirm", handlerAuth.DeleteAccountConfirm)
 
 	repoUsers := repository.NewUsersRepository(database)
 	serviceUsers := service.NewUsersService(repoUsers)
@@ -56,6 +58,8 @@ func main() {
 	router.GET("/users/me/following", handlerUsers.GetFollowings)
 	router.GET("/users/:id/following", handlerUsers.GetFollowingsById)
 	router.GET("/users/me/blacklist", handlerUsers.GetBlacklist)
+	router.GET("/users/search/by-name", handlerUsers.SearchByName)
+	router.GET("/users/search", handlerUsers.SearchByUsername)
 	router.Run(":8080")
 
 }
