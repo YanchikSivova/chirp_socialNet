@@ -15,6 +15,7 @@ type UsersService struct {
 func NewUsersService(r *repository.UsersRepository) *UsersService {
 	return &UsersService{repo: r}
 }
+
 func (s *UsersService) CheckUsername(username string) (bool, error) {
 	ctx := context.Background()
 	tx, err := s.repo.DB.Begin(ctx)
@@ -116,4 +117,199 @@ func (s *UsersService) GetProfile(profileID uuid.UUID) (*models.Profile, error) 
 		return nil, errors.New("profile is not completed")
 	}
 	return profile, tx.Commit(ctx)
+}
+
+func (s *UsersService) GetRelationship(meProfileId, profileId uuid.UUID) (string, error) {
+	ctx := context.Background()
+	tx, err := s.repo.DB.Begin(ctx)
+	if err != nil {
+		return "", err
+	}
+	defer tx.Rollback(ctx)
+	isMeBlocked, err := s.repo.CheckIsBlocked(ctx, tx, meProfileId, profileId)
+	if err != nil {
+		return "", err
+	}
+	isAnotherBlocked, err := s.repo.CheckIsBlocked(ctx, tx, meProfileId, profileId)
+	if err != nil {
+		return "", err
+	}
+	isSubscribed, err := s.repo.CheckIsSubscribed(ctx, tx, meProfileId, profileId)
+	if err != nil {
+		return "", err
+	}
+	if isMeBlocked || isAnotherBlocked {
+		return "blocked", tx.Commit(ctx)
+	}
+	if isSubscribed {
+		return "subscribed", tx.Commit(ctx)
+	}
+	return "", tx.Commit(ctx)
+}
+
+func (s *UsersService) Follow(subscriberID, subscribedID uuid.UUID) error {
+	ctx := context.Background()
+	tx, err := s.repo.DB.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	subscriberIsBlocked, err := s.repo.CheckIsBlocked(ctx, tx, subscriberID, subscribedID)
+	if err != nil {
+		return err
+	}
+	if subscriberIsBlocked {
+		return errors.New("your profile is blocked")
+	}
+	subscribedIsBlocked, err := s.repo.CheckIsBlocked(ctx, tx, subscribedID, subscriberID)
+	if err != nil {
+		return err
+	}
+	if subscribedIsBlocked {
+		return errors.New("profile is blocked")
+	}
+	err = s.repo.Follow(ctx, tx, subscriberID, subscribedID)
+	if err != nil {
+		return err
+	}
+	err = s.repo.UpdateFollowersAmount(ctx, tx, subscribedID)
+	if err != nil {
+		return err
+	}
+	err = s.repo.UpdateFollowingsAmount(ctx, tx, subscriberID)
+	if err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
+func (s *UsersService) Unfollow(subscriberID, subscribedID uuid.UUID) error {
+	ctx := context.Background()
+	tx, err := s.repo.DB.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	err = s.repo.Unfollow(ctx, tx, subscriberID, subscribedID)
+	if err != nil {
+		return err
+	}
+	err = s.repo.UpdateFollowersAmount(ctx, tx, subscribedID)
+	if err != nil {
+		return err
+	}
+	err = s.repo.UpdateFollowingsAmount(ctx, tx, subscriberID)
+	if err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
+func (s *UsersService) Block(bannedProfileId, profileId uuid.UUID) error {
+	ctx := context.Background()
+	tx, err := s.repo.DB.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	profileIsCompleted, err := s.repo.CheckProfileCompleted(ctx, tx, profileId)
+	if err != nil {
+		return err
+	}
+	if !profileIsCompleted {
+		return errors.New("profile is not completed")
+	}
+	bannedProfileCompleted, err := s.repo.CheckProfileCompleted(ctx, tx, bannedProfileId)
+	if err != nil {
+		return err
+	}
+	if !bannedProfileCompleted {
+		return errors.New("banned profile is not completed")
+	}
+	err = s.repo.Block(ctx, tx, bannedProfileId, profileId)
+	if err != nil {
+		return err
+	}
+	err = s.repo.Unfollow(ctx, tx, profileId, bannedProfileId)
+	if err != nil {
+		return err
+	}
+	err = s.repo.Unfollow(ctx, tx, bannedProfileId, profileId)
+	if err != nil {
+		return err
+	}
+	err = s.repo.UpdateFollowersAmount(ctx, tx, bannedProfileId)
+	if err != nil {
+		return err
+	}
+	err = s.repo.UpdateFollowersAmount(ctx, tx, profileId)
+	if err != nil {
+		return err
+	}
+	err = s.repo.UpdateFollowingsAmount(ctx, tx, bannedProfileId)
+	if err != nil {
+		return err
+	}
+	err = s.repo.UpdateFollowingsAmount(ctx, tx, profileId)
+	if err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
+func (s *UsersService) Unblock(bannedProfileId, profileId uuid.UUID) error {
+	ctx := context.Background()
+	tx, err := s.repo.DB.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	err = s.repo.Unblock(ctx, tx, bannedProfileId, profileId)
+	if err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
+func (s *UsersService) GetFollowers(profileId uuid.UUID, limit, offset int) ([]models.ProfileMinimum, error) {
+	ctx := context.Background()
+	tx, err := s.repo.DB.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx)
+	followers, err := s.repo.GetFollowers(ctx, tx, profileId, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	return followers, tx.Commit(ctx)
+}
+
+func (s *UsersService) GetFollowings(profileId uuid.UUID, limit, offset int) ([]models.ProfileMinimum, error) {
+	ctx := context.Background()
+	tx, err := s.repo.DB.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx)
+	followings, err := s.repo.GetFollowings(ctx, tx, profileId, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	return followings, tx.Commit(ctx)
+}
+
+func (s *UsersService) GetBlacklist(profileId uuid.UUID, limit, offset int) ([]models.ProfileMinimum, error) {
+	ctx := context.Background()
+	tx, err := s.repo.DB.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx)
+	blacklist, err := s.repo.GetBlacklist(ctx, tx, profileId, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	return blacklist, tx.Commit(ctx)
 }

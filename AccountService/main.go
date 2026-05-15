@@ -46,7 +46,16 @@ func main() {
 	router.POST("/users/me/profile", handlerUsers.FillProfile)
 	router.PATCH("/users/me/profile", handlerUsers.UpdateProfile)
 	router.GET("/users/me", handlerUsers.GetProfileMe)
-
+	router.GET("/users/:id", handlerUsers.GetProfileById)
+	router.POST("/users/:id/follow", handlerUsers.Follow)
+	router.POST("/users/:id/unfollow", handlerUsers.Unfollow)
+	router.POST("/users/:id/block", handlerUsers.Block)
+	router.POST("/users/:id/unblock", handlerUsers.Unblock)
+	router.GET("/users/me/followers", handlerUsers.GetFollowers)
+	router.GET("/users/:id/followers", handlerUsers.GetFollowersById)
+	router.GET("/users/me/following", handlerUsers.GetFollowings)
+	router.GET("/users/:id/following", handlerUsers.GetFollowingsById)
+	router.GET("/users/me/blacklist", handlerUsers.GetBlacklist)
 	router.Run(":8080")
 
 }

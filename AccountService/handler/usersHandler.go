@@ -1,10 +1,14 @@
 package handler
 
 import (
+	"accountService/models"
 	"accountService/service"
+	"errors"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"log"
 	"net/http"
+	"strconv"
 )
 
 type UsersHandler struct {
@@ -13,6 +17,55 @@ type UsersHandler struct {
 
 func NewUsersHandler(s *service.UsersService) *UsersHandler {
 	return &UsersHandler{service: s}
+}
+
+func parseProfileHeader(c *gin.Context) (*uuid.UUID, error) {
+	profileIdStr := c.GetHeader("X-User-Id")
+	if profileIdStr == "" {
+		return nil, errors.New("no profile_id found")
+	}
+	profileId, err := uuid.Parse(profileIdStr)
+	if err != nil {
+		return nil, err
+	}
+	return &profileId, nil
+}
+
+func parseProfileParam(c *gin.Context) (*uuid.UUID, error) {
+	profileIdStr := c.Param("id")
+	log.Printf("param parsed: %v", profileIdStr)
+	if profileIdStr == "" {
+		return nil, errors.New("no profile_id found")
+	}
+	profileId, err := uuid.Parse(profileIdStr)
+	if err != nil {
+		return nil, err
+	}
+	return &profileId, nil
+}
+
+func parseOffsetParam(c *gin.Context) (*int, error) {
+	offsetStr := c.Query("offset")
+	if offsetStr == "" {
+		return nil, errors.New("no offset found")
+	}
+	offset, err := strconv.Atoi(offsetStr)
+	if err != nil {
+		return nil, err
+	}
+	return &offset, nil
+}
+
+func parseLimitParam(c *gin.Context) (*int, error) {
+	limitStr := c.Query("limit")
+	if limitStr == "" {
+		return nil, errors.New("no limit found")
+	}
+	limit, err := strconv.Atoi(limitStr)
+	if err != nil {
+		return nil, err
+	}
+	return &limit, nil
 }
 
 type UsernameRequest struct {
@@ -46,15 +99,13 @@ type FillProfileRequest struct {
 }
 
 func (h *UsersHandler) FillProfile(c *gin.Context) {
-	profileIdStr := c.GetHeader("X-User-Id")
-	if profileIdStr == "" {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "no profile_id found"})
+	profileId, err := parseProfileHeader(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
 		return
 	}
-	profileId, err := uuid.Parse(profileIdStr)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
+	if profileId == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "no profile_id found"})
 	}
 	var req FillProfileRequest
 	if err := c.ShouldBind(&req); err != nil {
@@ -65,7 +116,7 @@ func (h *UsersHandler) FillProfile(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "username or name is empty"})
 		return
 	}
-	err = h.service.FillProfile(profileId, req.Name, req.Username, req.Avatar, req.Description)
+	err = h.service.FillProfile(*profileId, req.Name, req.Username, req.Avatar, req.Description)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -76,22 +127,20 @@ func (h *UsersHandler) FillProfile(c *gin.Context) {
 }
 
 func (h *UsersHandler) UpdateProfile(c *gin.Context) {
-	profileIdStr := c.GetHeader("X-User-Id")
-	if profileIdStr == "" {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "no profile_id found"})
+	profileId, err := parseProfileHeader(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
 		return
 	}
-	profileId, err := uuid.Parse(profileIdStr)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
+	if profileId == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "no profile_id found"})
 	}
 	var req FillProfileRequest
 	if err = c.ShouldBind(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	err = h.service.UpdateProfile(profileId, req.Name, req.Username, req.Avatar, req.Description)
+	err = h.service.UpdateProfile(*profileId, req.Name, req.Username, req.Avatar, req.Description)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -101,7 +150,7 @@ func (h *UsersHandler) UpdateProfile(c *gin.Context) {
 	})
 }
 
-type ProfileResponse struct {
+type ProfileMeResponse struct {
 	ProfileID         uuid.UUID `json:"profile_id"`
 	Name              string    `json:"name"`
 	Username          string    `json:"username"`
@@ -113,22 +162,21 @@ type ProfileResponse struct {
 }
 
 func (h *UsersHandler) GetProfileMe(c *gin.Context) {
-	profileIdStr := c.GetHeader("X-User-Id")
-	if profileIdStr == "" {
+	profileId, err := parseProfileHeader(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		return
+	}
+	if profileId == nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "no profile_id found"})
 		return
 	}
-	profileId, err := uuid.Parse(profileIdStr)
+	profile, err := h.service.GetProfile(*profileId)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	profile, err := h.service.GetProfile(profileId)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-	c.JSON(http.StatusOK, ProfileResponse{
+	c.JSON(http.StatusOK, ProfileMeResponse{
 		ProfileID:         profile.ProfileID,
 		Name:              *profile.Name,
 		Username:          *profile.Username,
@@ -137,5 +185,314 @@ func (h *UsersHandler) GetProfileMe(c *gin.Context) {
 		SubscribersAmount: profile.SubscribersAmount,
 		SubscribedAmount:  profile.SubscribedAmount,
 		PostsAmount:       profile.PostsAmount,
+	})
+}
+
+type ProfileResponse struct {
+	Profile      ProfileMeResponse `json:"profile"`
+	Relationship string            `json:"relationship"`
+}
+
+func (h *UsersHandler) GetProfileById(c *gin.Context) {
+	meProfileId, err := parseProfileHeader(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		return
+	}
+	if meProfileId == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "no profile_id found"})
+	}
+	profileId, err := parseProfileParam(c)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if profileId == nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "no profile_id found"})
+	}
+	profile, err := h.service.GetProfile(*profileId)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	relationship, err := h.service.GetRelationship(*meProfileId, *profileId)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, ProfileResponse{
+		Profile: ProfileMeResponse{
+			ProfileID:         profile.ProfileID,
+			Name:              *profile.Name,
+			Username:          *profile.Username,
+			Avatar:            *profile.Avatar,
+			Description:       *profile.Description,
+			SubscribersAmount: profile.SubscribersAmount,
+			SubscribedAmount:  profile.SubscribedAmount,
+			PostsAmount:       profile.PostsAmount,
+		},
+		Relationship: relationship,
+	})
+}
+
+func (h *UsersHandler) Follow(c *gin.Context) {
+	meProfileId, err := parseProfileHeader(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		return
+	}
+	if meProfileId == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "no profile_id found"})
+	}
+	profileId, err := parseProfileParam(c)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if profileId == nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "no profile_id found"})
+	}
+	err = h.service.Follow(*meProfileId, *profileId)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusCreated, SuccessResponse{
+		Success: true,
+	})
+}
+
+func (h *UsersHandler) Unfollow(c *gin.Context) {
+	meProfileId, err := parseProfileHeader(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		return
+	}
+	if meProfileId == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "no profile_id found"})
+	}
+	profileId, err := parseProfileParam(c)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if profileId == nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "no profile_id found"})
+	}
+	err = h.service.Unfollow(*meProfileId, *profileId)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, SuccessResponse{
+		Success: true,
+	})
+}
+
+func (h *UsersHandler) Block(c *gin.Context) {
+	meProfileId, err := parseProfileHeader(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		return
+	}
+	if meProfileId == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "no profile_id found"})
+		return
+	}
+	profileId, err := parseProfileParam(c)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if profileId == nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "no profile_id found"})
+		return
+	}
+	err = h.service.Block(*profileId, *meProfileId)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, SuccessResponse{
+		Success: true,
+	})
+}
+
+func (h *UsersHandler) Unblock(c *gin.Context) {
+	meProfileId, err := parseProfileHeader(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		return
+	}
+	if meProfileId == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "no profile_id found"})
+	}
+	bannedProfileId, err := parseProfileParam(c)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if bannedProfileId == nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "no profile_id found"})
+	}
+	err = h.service.Unblock(*bannedProfileId, *meProfileId)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, SuccessResponse{
+		Success: true,
+	})
+}
+
+type ProfileSliceResponse struct {
+	Profiles []models.ProfileMinimum `json:"profiles"`
+	Limit    int                     `json:"limit"`
+	Offset   int                     `json:"offset"`
+}
+
+func (h *UsersHandler) GetFollowers(c *gin.Context) {
+	profileId, err := parseProfileHeader(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		return
+	}
+	offset, err := parseOffsetParam(c)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	limit, err := parseLimitParam(c)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	followers, err := h.service.GetFollowers(*profileId, *limit, *offset)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, ProfileSliceResponse{
+		Profiles: followers,
+		Limit:    *limit,
+		Offset:   *offset,
+	})
+}
+
+func (h *UsersHandler) GetFollowersById(c *gin.Context) {
+	profileId, err := parseProfileParam(c)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	offset, err := parseOffsetParam(c)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	limit, err := parseLimitParam(c)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	followers, err := h.service.GetFollowers(*profileId, *limit, *offset)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, ProfileSliceResponse{
+		Profiles: followers,
+		Limit:    *limit,
+		Offset:   *offset,
+	})
+}
+
+func (h *UsersHandler) GetFollowings(c *gin.Context) {
+	profileId, err := parseProfileHeader(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		return
+	}
+	offset, err := parseOffsetParam(c)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	limit, err := parseLimitParam(c)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	followings, err := h.service.GetFollowings(*profileId, *limit, *offset)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, ProfileSliceResponse{
+		Profiles: followings,
+		Limit:    *limit,
+		Offset:   *offset,
+	})
+}
+
+func (h *UsersHandler) GetFollowingsById(c *gin.Context) {
+	profileId, err := parseProfileParam(c)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	offset, err := parseOffsetParam(c)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	limit, err := parseLimitParam(c)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	followings, err := h.service.GetFollowings(*profileId, *limit, *offset)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, ProfileSliceResponse{
+		Profiles: followings,
+		Limit:    *limit,
+		Offset:   *offset,
+	})
+}
+
+func (h *UsersHandler) GetBlacklist(c *gin.Context) {
+	profileId, err := parseProfileHeader(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		return
+	}
+	offset, err := parseOffsetParam(c)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	limit, err := parseLimitParam(c)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	blacklist, err := h.service.GetBlacklist(*profileId, *limit, *offset)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, ProfileSliceResponse{
+		Profiles: blacklist,
+		Limit:    *limit,
+		Offset:   *offset,
 	})
 }

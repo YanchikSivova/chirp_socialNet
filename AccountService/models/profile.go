@@ -13,3 +13,10 @@ type Profile struct {
 	PostsAmount       int       `json:"posts_amount"`
 	IsCompleted       bool      `json:"is_completed"`
 }
+
+type ProfileMinimum struct {
+	ProfileID uuid.UUID `json:"profile_id"`
+	Name      string    `json:"name"`
+	Username  string    `json:"username"`
+	Avatar    string    `json:"avatar"`
+}

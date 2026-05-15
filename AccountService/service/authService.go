@@ -80,7 +80,7 @@ func (s *AuthService) Register(email, password string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return token, nil
+	return token, tx.Commit(ctx)
 }
 
 func resendVerification(s *AuthService, credentialsID uuid.UUID, email string, ctx context.Context, tx pgx.Tx) error {
