@@ -11,6 +11,7 @@ func main() {
 	r := gin.Default()
 
 	accountProxy, err := proxy.NewReverseProxy("http://account-service:8080")
+	postProxy, err := proxy.NewReverseProxy("http://post-service:8181")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -37,11 +38,19 @@ func main() {
 		protectedAuth.POST("/me/delete/*path", proxy.ProxyHandler(accountProxy))
 	}
 	//PROTECTED routes
-	protected := r.Group("/users")
-	protected.Use(middleware.AuthMiddleware())
+	protectedUsers := r.Group("/users")
+	protectedUsers.Use(middleware.AuthMiddleware())
 	{
-		protected.Any("/*path", proxy.ProxyHandler(accountProxy))
+		protectedUsers.Any("/*path", proxy.ProxyHandler(accountProxy))
 
 	}
+
+	protectedPosts := r.Group("/posts")
+	protectedPosts.Use(middleware.AuthMiddleware())
+	{
+		protectedPosts.Any("", proxy.ProxyHandler(postProxy))
+		protectedPosts.Any("/*path", proxy.ProxyHandler(postProxy))
+	}
+
 	r.Run(":8000")
 }

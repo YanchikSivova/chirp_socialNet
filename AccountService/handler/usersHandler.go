@@ -554,3 +554,19 @@ func (h *UsersHandler) SearchByUsername(c *gin.Context) {
 		Offset:   *offset,
 	})
 }
+
+func (h *UsersHandler) UserExists(c *gin.Context) {
+	profileId, err := parseProfileParam(c)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	exists, err := h.service.ProfileExists(*profileId)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, ExistsResponse{
+		Exists: exists,
+	})
+}

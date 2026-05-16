@@ -60,6 +60,9 @@ func main() {
 	router.GET("/users/me/blacklist", handlerUsers.GetBlacklist)
 	router.GET("/users/search/by-name", handlerUsers.SearchByName)
 	router.GET("/users/search", handlerUsers.SearchByUsername)
+
+	//Внутренние запросы
+	router.GET("/internal/users/:id/exists", handlerUsers.UserExists)
 	router.Run(":8080")
 
 }

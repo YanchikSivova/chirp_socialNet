@@ -83,16 +83,6 @@ func (r *UsersRepository) Follow(ctx context.Context, tx pgx.Tx, subscriberID, s
 	return err
 }
 
-/*func (r *UsersRepository) UpdateFollowersAmount(ctx context.Context, tx pgx.Tx, profileID uuid.UUID) error {
-	_, err := tx.Exec(ctx, `UPDATE profile SET subscribers_amount = (SELECT COUNT(*) FROM subscription WHERE subscribed_id=$1) WHERE profile_id = $1`, profileID)
-	return err
-}
-
-func (r *UsersRepository) UpdateFollowingsAmount(ctx context.Context, tx pgx.Tx, profileID uuid.UUID) error {
-	_, err := tx.Exec(ctx, `UPDATE profile SET subscribed_amount = (SELECT COUNT(*) FROM subscription WHERE subscriber_id=$1) WHERE profile_id = $1`, profileID)
-	return err
-}*/
-
 func (r *UsersRepository) Unfollow(ctx context.Context, tx pgx.Tx, subscriberID, subscribedID uuid.UUID) error {
 	_, err := tx.Exec(ctx, `DELETE FROM subscription WHERE subscriber_id=$1 AND subscribed_id=$2`, subscriberID, subscribedID)
 	return err
@@ -255,4 +245,11 @@ func (r *UsersRepository) GetProfileByCredentials(ctx context.Context, tx pgx.Tx
 		return nil, err
 	}
 	return profileId, nil
+}
+
+func (r *UsersRepository) ProfileExists(ctx context.Context, tx pgx.Tx, profileId uuid.UUID) (bool, error) {
+	var exists bool
+	row := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM profile WHERE profile_id=$1 AND is_completed=true)`, profileId)
+	err := row.Scan(&exists)
+	return exists, err
 }
