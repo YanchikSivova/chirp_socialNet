@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/google/uuid"
 	"net/http"
+	"postService/models"
 )
 
 type AccountClient struct {
@@ -41,4 +42,26 @@ func (c *AccountClient) ProfileExists(profileID uuid.UUID) (bool, error) {
 		return false, err
 	}
 	return result.Exists, nil
+}
+
+func (c *AccountClient) ProfileMinimum(profileID uuid.UUID) (*models.Profile, error) {
+	url := fmt.Sprintf(
+		"%s/internal/users/%s/profile",
+		c.baseURL,
+		profileID.String(),
+	)
+	resp, err := c.client.Get(url)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+	}
+	var profile models.Profile
+	err = json.NewDecoder(resp.Body).Decode(&profile)
+	if err != nil {
+		return nil, err
+	}
+	return &profile, nil
 }

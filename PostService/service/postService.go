@@ -98,3 +98,280 @@ func (s *PostService) CreatePost(profileID uuid.UUID, postRequest models.CreateP
 	}
 	return tx.Commit(ctx)
 }
+
+func (s *PostService) UpdatePost(profileID, postID uuid.UUID, postReq models.UpdatePostRequest) error {
+	ctx := context.Background()
+	tx, err := s.repo.DB.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	authorID, err := s.repo.GetAuthorId(ctx, tx, postID)
+	if err != nil {
+		return err
+	}
+	if authorID != profileID {
+		return errors.New("invalid author id")
+	}
+	status, err := s.repo.GetPostStatus(ctx, tx, postID)
+	if err != nil {
+		return err
+	}
+	if status != "draft" {
+		return errors.New("invalid post status")
+	}
+	if postReq.Content == "" || utf8.RuneCountInString(postReq.Content) > 250 {
+		return errors.New("invalid post content")
+	}
+	err = s.repo.UpdatePostContent(ctx, tx, postID, postReq.Content)
+	if err != nil {
+		return err
+	}
+	// Удаляем хэштеги чтобы перезаписать заново новые
+	err = s.repo.DeleteImages(ctx, tx, postID)
+	if err != nil {
+		return err
+	}
+	for _, image := range postReq.Images {
+		newImage := models.Image{
+			ImageID:    uuid.New(),
+			PostID:     postID,
+			Url:        image.Url,
+			OrderIndex: image.OrderIndex,
+		}
+		err = s.repo.CreateImage(ctx, tx, newImage)
+		if err != nil {
+			return err
+		}
+	}
+	for _, hashtag := range postReq.Hashtags {
+		id, err := s.repo.GetHashtagId(ctx, tx, hashtag.HashtagName)
+		if err != nil && err != pgx.ErrNoRows {
+			return err
+		}
+		if err == pgx.ErrNoRows {
+			id = uuid.New()
+			newHashtag := models.Hashtag{
+				HashtagID:   id,
+				HashtagName: hashtag.HashtagName,
+			}
+			err = s.repo.CreateHashtag(ctx, tx, newHashtag)
+			if err != nil {
+				return err
+			}
+		}
+		newPostHashtag := models.PostHashtag{
+			PostHashtagID: uuid.New(),
+			PostID:        postID,
+			HashtagID:     id,
+			OrderIndex:    hashtag.OrderIndex,
+		}
+		err = s.repo.CreatePostHashtag(ctx, tx, newPostHashtag)
+		if err != nil {
+			return err
+		}
+	}
+	err = s.repo.UpdateLastEditedTime(ctx, tx, postID)
+	if err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
+func (s *PostService) DeletePost(profileID, postID uuid.UUID) error {
+	ctx := context.Background()
+	tx, err := s.repo.DB.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	authorID, err := s.repo.GetAuthorId(ctx, tx, profileID)
+	if err != nil {
+		return err
+	}
+	if authorID != profileID {
+		return errors.New("invalid author id")
+	}
+	err = s.repo.DeletePost(ctx, tx, postID)
+	if err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
+func (s *PostService) GetPost(postID, profileID uuid.UUID) (*models.Post, *models.Profile, []models.ImageList, []models.HashtagList, bool, bool, error) {
+	ctx := context.Background()
+	tx, err := s.repo.DB.Begin(ctx)
+	if err != nil {
+		return nil, nil, nil, nil, false, false, err
+	}
+	defer tx.Rollback(ctx)
+	post, err := s.repo.GetPost(ctx, tx, postID)
+	if err != nil {
+		return nil, nil, nil, nil, false, false, err
+	}
+	profile, err := s.accountClient.ProfileMinimum(post.ProfileID)
+	if err != nil {
+		return nil, nil, nil, nil, false, false, err
+	}
+	images, err := s.repo.GetImages(ctx, tx, postID)
+	if err != nil {
+		return nil, nil, nil, nil, false, false, err
+	}
+	hashtags, err := s.repo.GetPostHashtags(ctx, tx, postID)
+	if err != nil {
+		return nil, nil, nil, nil, false, false, err
+	}
+	liked, err := s.repo.CheckLike(ctx, tx, postID, profileID)
+	if err != nil {
+		return nil, nil, nil, nil, false, false, err
+	}
+	reposted, err := s.repo.CheckRepost(ctx, tx, postID, profileID)
+	if err != nil {
+		return nil, nil, nil, nil, false, false, err
+	}
+	return post, profile, images, hashtags, liked, reposted, tx.Commit(ctx)
+}
+
+func (s *PostService) CreateLike(postID, profileID uuid.UUID) error {
+	ctx := context.Background()
+	tx, err := s.repo.DB.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	err = s.repo.CreateLike(ctx, tx, postID, profileID)
+	if err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
+func (s *PostService) DeleteLike(postID, profileID uuid.UUID) error {
+	ctx := context.Background()
+	tx, err := s.repo.DB.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	err = s.repo.DeleteLike(ctx, tx, postID, profileID)
+	if err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
+func (s *PostService) CreateRepost(postID, profileID uuid.UUID) error {
+	ctx := context.Background()
+	tx, err := s.repo.DB.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	authorId, err := s.repo.GetAuthorId(ctx, tx, postID)
+	if err != nil {
+		return err
+	}
+	if authorId == profileID {
+		return errors.New("cannot create repost")
+	}
+	err = s.repo.CreateRepost(ctx, tx, postID, profileID)
+	if err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
+func (s *PostService) DeleteRepost(postID, profileID uuid.UUID) error {
+	ctx := context.Background()
+	tx, err := s.repo.DB.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	err = s.repo.DeleteRepost(ctx, tx, postID, profileID)
+	if err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
+func (s *PostService) CreateReport(postID, profileID uuid.UUID, reason string) error {
+	ctx := context.Background()
+	tx, err := s.repo.DB.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	authorId, err := s.repo.GetAuthorId(ctx, tx, postID)
+	if err != nil {
+		return err
+	}
+	if authorId == profileID {
+		return errors.New("cannot create report")
+	}
+	err = s.repo.CreateReport(ctx, tx, postID, profileID, reason)
+	if err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
+func (s *PostService) CreateComment(postID, profileID uuid.UUID, content string, parentCommentID *uuid.UUID) error {
+	ctx := context.Background()
+	tx, err := s.repo.DB.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	if content == "" || utf8.RuneCountInString(content) > 250 {
+		return errors.New("invalid content length")
+	}
+	if parentCommentID == nil {
+		err = s.repo.CreateComment(ctx, tx, postID, profileID, content)
+		if err != nil {
+			return err
+		}
+	} else {
+		parentPostID, err := s.repo.GetPostIDFromComment(ctx, tx, *parentCommentID)
+		if err != nil {
+			return err
+		}
+		if parentPostID != postID {
+			return errors.New("comment references to another post")
+		}
+		err = s.repo.CreateCommentWithParent(ctx, tx, postID, profileID, *parentCommentID, content)
+		if err != nil {
+			return err
+		}
+	}
+	return tx.Commit(ctx)
+}
+
+func (s *PostService) CreateCommentLike(commentID, profileID uuid.UUID) error {
+	ctx := context.Background()
+	tx, err := s.repo.DB.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	err = s.repo.CreateCommentLike(ctx, tx, commentID, profileID)
+	if err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
+func (s *PostService) DeleteCommentLike(commentID, profileID uuid.UUID) error {
+	ctx := context.Background()
+	tx, err := s.repo.DB.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	err = s.repo.DeleteCommentLike(ctx, tx, commentID, profileID)
+	if err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}

@@ -8,7 +8,6 @@ create table if not exists post(
     likes_amount int not null default 0 check(likes_amount >= 0),
     comments_amount int not null default 0 check(comments_amount >= 0),
     reposts_amount int not null default 0 check(reposts_amount >= 0),
-    views_amount int not null default 0 check(views_amount >= 0),
     reports_amount int not null default 0 check(reports_amount >= 0)
 );
 
@@ -38,6 +37,7 @@ create table if not exists repost(
     repost_id UUID primary key,
     post_id UUID not null,
     profile_id UUID not null,
+    unique(post_id, profile_id),
     created_at timestamp not null default now(),
     foreign key (post_id) references post(post_id) on delete cascade
 );
@@ -46,6 +46,7 @@ create table if not exists likes(
     likes_id UUID primary key,
     post_id UUID not null,
     profile_id UUID not null,
+    unique(post_id, profile_id),
     liked_at timestamp not null default now(),
     foreign key(post_id) references post(post_id) on delete cascade
 );
@@ -54,6 +55,7 @@ create table if not exists report(
     report_id UUID primary key,
     post_id UUID not null,
     profile_id UUID,
+    unique(post_id, profile_id),
     reason text not null check(length(reason)>0),
     created_at timestamp not null default now(),
     foreign key(post_id) references post(post_id) on delete cascade
@@ -75,6 +77,7 @@ create table if not exists comment_like(
     comment_like_id UUID primary key,
     comment_id UUID not null,
     profile_id UUID not null,
+    unique(profile_id, comment_id),
     liked_at timestamp not null default now(),
     foreign key(comment_id) references comment(comment_id) on delete cascade
 );
@@ -191,15 +194,14 @@ create or replace function update_reports_amount()
 returns trigger as $$
 declare
     reports_count int;
-    views_count int;
 begin
     if tg_op='INSERT' then
         update post
         set reports_amount = reports_amount + 1
         where post_id = NEW.post_id
-        returning reports_amount, views_amount into reports_count, views_count;
+        returning reports_amount into reports_count;
 
-        if reports_count >= 10 and reports_count >= views_count * 0.1 then
+        if reports_count >= 10 then
             update post
             set status = 'banned'
             where post_id = NEW.post_id;

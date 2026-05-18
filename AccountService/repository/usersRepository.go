@@ -23,7 +23,7 @@ func (r *UsersRepository) UsernameExists(ctx context.Context, tx pgx.Tx, usernam
 	return exists, err
 }
 
-func (r *UsersRepository) FillProfile(ctx context.Context, tx pgx.Tx, profileID uuid.UUID, name, username, description, avatar string) error {
+func (r *UsersRepository) FillProfile(ctx context.Context, tx pgx.Tx, profileID uuid.UUID, name, username, avatar, description string) error {
 	_, err := tx.Exec(ctx, `UPDATE profile SET name=$1, username=$2, avatar=$3, description=$4, is_completed=true WHERE profile_id=$5`, name, username, avatar, description, profileID)
 	return err
 }
@@ -252,4 +252,15 @@ func (r *UsersRepository) ProfileExists(ctx context.Context, tx pgx.Tx, profileI
 	row := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM profile WHERE profile_id=$1 AND is_completed=true)`, profileId)
 	err := row.Scan(&exists)
 	return exists, err
+}
+
+func (r *UsersRepository) GetProfileMinimumById(ctx context.Context, tx pgx.Tx, profileId uuid.UUID) (*models.ProfileMinimum, error) {
+	var profile models.ProfileMinimum
+	err := tx.QueryRow(ctx, `SELECT profile_id, name, username, avatar FROM profile WHERE profile_id=$1`, profileId).Scan(
+		&profile.ProfileID,
+		&profile.Name,
+		&profile.Username,
+		&profile.Avatar,
+	)
+	return &profile, err
 }

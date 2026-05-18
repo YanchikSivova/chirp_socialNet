@@ -63,6 +63,7 @@ func main() {
 
 	//Внутренние запросы
 	router.GET("/internal/users/:id/exists", handlerUsers.UserExists)
+	router.GET("/internal/users/:id/profile", handlerUsers.GetProfileMinimum)
 	router.Run(":8080")
 
 }

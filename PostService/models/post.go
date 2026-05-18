@@ -15,7 +15,6 @@ type Post struct {
 	LikesAmount    int        `json:"likes_amount"`
 	CommentsAmount int        `json:"comments_amount"`
 	RepostsAmount  int        `json:"reposts_amount"`
-	ViewsAmount    int        `json:"views_amount"`
 	ReportsAmount  int        `json:"reports_amount"`
 }
 
@@ -26,10 +25,24 @@ type ImageList struct {
 
 type HashtagList struct {
 	HashtagName string `json:"hashtag_name"`
+	OrderIndex  int    `json:"order_index"`
 }
 type CreatePostRequest struct {
 	Content  string        `json:"content"`
 	Images   []ImageList   `json:"images"`
 	Hashtags []HashtagList `json:"hashtags"`
 	Status   string        `json:"status"`
+}
+
+type UpdatePostRequest struct {
+	Content  string        `json:"content"`
+	Images   []ImageList   `json:"images"`
+	Hashtags []HashtagList `json:"hashtags"`
+}
+
+type Profile struct {
+	ProfileID uuid.UUID `json:"profile_id"`
+	Name      string    `json:"name"`
+	Username  string    `json:"username"`
+	Avatar    string    `json:"avatar"`
 }

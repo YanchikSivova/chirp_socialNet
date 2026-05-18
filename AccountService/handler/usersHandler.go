@@ -570,3 +570,22 @@ func (h *UsersHandler) UserExists(c *gin.Context) {
 		Exists: exists,
 	})
 }
+
+func (h *UsersHandler) GetProfileMinimum(c *gin.Context) {
+	profileId, err := parseProfileParam(c)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	profile, err := h.service.GetProfileMinimum(*profileId)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, models.ProfileMinimum{
+		ProfileID: profile.ProfileID,
+		Name:      profile.Name,
+		Username:  profile.Username,
+		Avatar:    profile.Avatar,
+	})
+}

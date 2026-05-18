@@ -331,3 +331,17 @@ func (s *UsersService) ProfileExists(profileID uuid.UUID) (bool, error) {
 	}
 	return exists, tx.Commit(ctx)
 }
+
+func (s *UsersService) GetProfileMinimum(profileID uuid.UUID) (*models.ProfileMinimum, error) {
+	ctx := context.Background()
+	tx, err := s.repo.DB.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx)
+	profileMinimum, err := s.repo.GetProfileMinimumById(ctx, tx, profileID)
+	if err != nil {
+		return nil, err
+	}
+	return profileMinimum, tx.Commit(ctx)
+}

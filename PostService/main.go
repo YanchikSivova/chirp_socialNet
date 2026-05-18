@@ -26,6 +26,17 @@ func main() {
 	router := gin.Default()
 
 	router.POST("/posts", postHandler.CreatePost)
-	
+	router.PATCH("/posts/:id", postHandler.UpdatePost)
+	router.DELETE("/posts/:id", postHandler.DeletePost)
+	router.GET("/posts/:id", postHandler.GetPost)
+	router.POST("/posts/:id/like", postHandler.CreateLike)
+	router.DELETE("/posts/:id/like", postHandler.DeleteLike)
+	router.POST("/posts/:id/repost", postHandler.CreateRepost)
+	router.DELETE("/posts/:id/repost", postHandler.DeleteRepost)
+	router.POST("/posts/:id/report", postHandler.CreateReport)
+	router.POST("/posts/:id/comments", postHandler.CreateComment)
+	router.POST("/comments/:id/like", postHandler.CreateCommentLike)
+	router.DELETE("/comments/:id/like", postHandler.DeleteCommentLike)
+
 	router.Run(":8181")
 }
