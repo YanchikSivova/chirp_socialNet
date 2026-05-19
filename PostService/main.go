@@ -37,6 +37,13 @@ func main() {
 	router.POST("/posts/:id/comments", postHandler.CreateComment)
 	router.POST("/comments/:id/like", postHandler.CreateCommentLike)
 	router.DELETE("/comments/:id/like", postHandler.DeleteCommentLike)
+	router.GET("/comments/:id", postHandler.GetComment)
+	router.DELETE("/comments/:id", postHandler.DeleteComment)
+	router.POST("/posts/:id/publish", postHandler.PublishPost)
+	router.GET("/users/me/posts/:status", postHandler.GetPostsMe)
+	router.GET("/users/:id/posts", postHandler.GetPosts)
+	router.GET("/posts/:id/comments", postHandler.GetComments)
+	router.GET("/comments/:id/answers", postHandler.GetCommentAnswers)
 
 	router.Run(":8181")
 }

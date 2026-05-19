@@ -80,14 +80,16 @@ func (r *PostRepository) DeletePost(ctx context.Context, tx pgx.Tx, postId uuid.
 
 func (r *PostRepository) GetPost(ctx context.Context, tx pgx.Tx, postId uuid.UUID) (*models.Post, error) {
 	var post models.Post
-	err := tx.QueryRow(ctx, `SELECT post_id, profile_id, content, published_at, likes_amount, comments_amount, reposts_amount FROM post WHERE post_id=$1 and status='published'`, postId).Scan(
+	err := tx.QueryRow(ctx, `SELECT post_id, profile_id, content, last_edited_at, published_at, likes_amount, comments_amount, reposts_amount, status FROM post WHERE post_id=$1`, postId).Scan(
 		&post.PostID,
 		&post.ProfileID,
 		&post.Content,
+		&post.LastEditedAt,
 		&post.PublishedAt,
 		&post.LikesAmount,
 		&post.CommentsAmount,
 		&post.RepostsAmount,
+		&post.Status,
 	)
 	return &post, err
 }
@@ -196,4 +198,123 @@ func (r *PostRepository) GetPostIDFromComment(ctx context.Context, tx pgx.Tx, co
 	var postID uuid.UUID
 	err := tx.QueryRow(ctx, `SELECT post_id FROM comment WHERE comment_id=$1`, commentID).Scan(&postID)
 	return postID, err
+}
+
+func (r *PostRepository) GetComment(ctx context.Context, tx pgx.Tx, commentID uuid.UUID) (*models.Comment, error) {
+	var comment models.Comment
+	err := tx.QueryRow(ctx, `SELECT * FROM comment WHERE comment_id=$1`, commentID).Scan(
+		&comment.CommentID,
+		&comment.PostID,
+		&comment.ProfileID,
+		&comment.ParentCommentID,
+		&comment.Content,
+		&comment.LikesAmount,
+		&comment.CreatedAt,
+	)
+	return &comment, err
+}
+
+func (r *PostRepository) CheckCommentLike(ctx context.Context, tx pgx.Tx, commentID, profileID uuid.UUID) (bool, error) {
+	var isLiked bool
+	err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM comment_like WHERE comment_id=$1 AND profile_id=$2)`, commentID, profileID).Scan(&isLiked)
+	return isLiked, err
+}
+
+func (r *PostRepository) GetProfileIDFromComment(ctx context.Context, tx pgx.Tx, commentID uuid.UUID) (uuid.UUID, error) {
+	var profileID uuid.UUID
+	err := tx.QueryRow(ctx, `SELECT profile_id FROM comment WHERE comment_id=$1`, commentID).Scan(&profileID)
+	return profileID, err
+}
+
+func (r *PostRepository) DeleteComment(ctx context.Context, tx pgx.Tx, commentID uuid.UUID) error {
+	_, err := tx.Exec(ctx, `DELETE FROM comment WHERE comment_id=$1`, commentID)
+	return err
+}
+
+func (r *PostRepository) PublishPost(ctx context.Context, tx pgx.Tx, postID uuid.UUID) error {
+	_, err := tx.Exec(ctx, `UPDATE post SET status='published' WHERE post_id=$1`, postID)
+	return err
+}
+
+func (r *PostRepository) GetPosts(ctx context.Context, tx pgx.Tx, profileID uuid.UUID, status string, offset, limit int) ([]models.Post, error) {
+	var posts []models.Post
+	rows, err := tx.Query(ctx, `SELECT post_id, content, published_at, last_edited_at, likes_amount, comments_amount, reposts_amount FROM post WHERE status=$1 AND profile_id=$2 ORDER BY last_edited_at DESC  LIMIT $3 OFFSET $4 `, status, profileID, limit, offset)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return []models.Post{}, nil
+		}
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var post models.Post
+		err = rows.Scan(
+			&post.PostID,
+			&post.Content,
+			&post.PublishedAt,
+			&post.LastEditedAt,
+			&post.LikesAmount,
+			&post.CommentsAmount,
+			&post.RepostsAmount,
+		)
+		if err != nil {
+			return nil, err
+		}
+		posts = append(posts, post)
+	}
+	return posts, nil
+}
+
+func (r *PostRepository) GetComments(ctx context.Context, tx pgx.Tx, postID uuid.UUID, limit, offset int) ([]models.Comment, error) {
+	var comments []models.Comment
+	rows, err := tx.Query(ctx, `SELECT comment_id, profile_id, content, likes_amount, created_at FROM comment WHERE post_id=$1 AND parent_comment_id is NULL ORDER BY created_at DESC LIMIT $2 OFFSET $3 `, postID, limit, offset)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return []models.Comment{}, nil
+		}
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var comment models.Comment
+		err = rows.Scan(
+			&comment.CommentID,
+			&comment.ProfileID,
+			&comment.Content,
+			&comment.LikesAmount,
+			&comment.CreatedAt,
+		)
+		if err != nil {
+			return nil, err
+		}
+		comments = append(comments, comment)
+	}
+	return comments, nil
+}
+
+func (r *PostRepository) GetCommentAnswers(ctx context.Context, tx pgx.Tx, commentID uuid.UUID, limit, offset int) ([]models.Comment, error) {
+	var comments []models.Comment
+	rows, err := tx.Query(ctx, `SELECT comment_id, profile_id, content, likes_amount, created_at FROM comment WHERE parent_comment_id=$1 ORDER BY created_at DESC LIMIT $2 OFFSET $3 `, commentID, limit, offset)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return []models.Comment{}, nil
+		}
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var comment models.Comment
+		err = rows.Scan(
+			&comment.CommentID,
+			&comment.ProfileID,
+			&comment.Content,
+			&comment.LikesAmount,
+			&comment.CreatedAt,
+		)
+		if err != nil {
+			return nil, err
+		}
+		comments = append(comments, comment)
+	}
+	return comments, nil
 }

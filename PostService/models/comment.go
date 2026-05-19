@@ -14,3 +14,12 @@ type Comment struct {
 	LikesAmount     int        `json:"likes_amount"`
 	CreatedAt       time.Time  `json:"created_at"`
 }
+
+type CommentResponse struct {
+	Author      Profile   `json:"author"`
+	CommentID   uuid.UUID `json:"comment_id"`
+	Content     string    `json:"content"`
+	LikesAmount int       `json:"likes_amount"`
+	CreatedAt   time.Time `json:"created_at"`
+	IsLiked     bool      `json:"is_liked"`
+}

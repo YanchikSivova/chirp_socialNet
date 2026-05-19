@@ -41,8 +41,21 @@ func main() {
 	protectedUsers := r.Group("/users")
 	protectedUsers.Use(middleware.AuthMiddleware())
 	{
-		protectedUsers.Any("/*path", proxy.ProxyHandler(accountProxy))
-
+		protectedUsers.POST("/check-username", proxy.ProxyHandler(accountProxy))
+		protectedUsers.Any("/me/profile", proxy.ProxyHandler(accountProxy))
+		protectedUsers.GET("/me", proxy.ProxyHandler(accountProxy))
+		protectedUsers.GET("/:id", proxy.ProxyHandler(accountProxy))
+		protectedUsers.Any("/:id/follow", proxy.ProxyHandler(accountProxy))
+		protectedUsers.Any("/:id/block", proxy.ProxyHandler(accountProxy))
+		protectedUsers.Any("/:id/followers", proxy.ProxyHandler(accountProxy))
+		protectedUsers.Any("/:id/following", proxy.ProxyHandler(accountProxy))
+		protectedUsers.GET("/me/followers", proxy.ProxyHandler(accountProxy))
+		protectedUsers.GET("/me/following", proxy.ProxyHandler(accountProxy))
+		protectedUsers.GET("/me/blacklist", proxy.ProxyHandler(accountProxy))
+		protectedUsers.GET("/search/by-name", proxy.ProxyHandler(accountProxy))
+		protectedUsers.GET("/search", proxy.ProxyHandler(accountProxy))
+		protectedUsers.GET("/me/posts/*path", proxy.ProxyHandler(postProxy))
+		protectedUsers.GET("/:id/posts", proxy.ProxyHandler(postProxy))
 	}
 
 	protectedPosts := r.Group("/posts")

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"log"
 	"postService/client"
 	"postService/models"
 	"postService/repository"
@@ -210,7 +211,10 @@ func (s *PostService) GetPost(postID, profileID uuid.UUID) (*models.Post, *model
 	if err != nil {
 		return nil, nil, nil, nil, false, false, err
 	}
-	profile, err := s.accountClient.ProfileMinimum(post.ProfileID)
+	if post.Status != "published" && post.ProfileID != profileID {
+		return nil, nil, nil, nil, false, false, errors.New("not allowed")
+	}
+	author, err := s.accountClient.ProfileMinimum(post.ProfileID)
 	if err != nil {
 		return nil, nil, nil, nil, false, false, err
 	}
@@ -230,7 +234,7 @@ func (s *PostService) GetPost(postID, profileID uuid.UUID) (*models.Post, *model
 	if err != nil {
 		return nil, nil, nil, nil, false, false, err
 	}
-	return post, profile, images, hashtags, liked, reposted, tx.Commit(ctx)
+	return post, author, images, hashtags, liked, reposted, tx.Commit(ctx)
 }
 
 func (s *PostService) CreateLike(postID, profileID uuid.UUID) error {
@@ -240,6 +244,13 @@ func (s *PostService) CreateLike(postID, profileID uuid.UUID) error {
 		return err
 	}
 	defer tx.Rollback(ctx)
+	status, err := s.repo.GetPostStatus(ctx, tx, postID)
+	if err != nil {
+		return err
+	}
+	if status != "published" {
+		return errors.New("invalid post status")
+	}
 	err = s.repo.CreateLike(ctx, tx, postID, profileID)
 	if err != nil {
 		return err
@@ -268,6 +279,13 @@ func (s *PostService) CreateRepost(postID, profileID uuid.UUID) error {
 		return err
 	}
 	defer tx.Rollback(ctx)
+	status, err := s.repo.GetPostStatus(ctx, tx, postID)
+	if err != nil {
+		return err
+	}
+	if status != "published" {
+		return errors.New("invalid post status")
+	}
 	authorId, err := s.repo.GetAuthorId(ctx, tx, postID)
 	if err != nil {
 		return err
@@ -317,30 +335,41 @@ func (s *PostService) CreateReport(postID, profileID uuid.UUID, reason string) e
 	return tx.Commit(ctx)
 }
 
-func (s *PostService) CreateComment(postID, profileID uuid.UUID, content string, parentCommentID *uuid.UUID) error {
+func (s *PostService) CreateComment(postID, profileID uuid.UUID, content string, parentCommentIDStr string) error {
 	ctx := context.Background()
 	tx, err := s.repo.DB.Begin(ctx)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback(ctx)
+	status, err := s.repo.GetPostStatus(ctx, tx, postID)
+	if err != nil {
+		return err
+	}
+	if status != "published" {
+		return errors.New("invalid post status")
+	}
 	if content == "" || utf8.RuneCountInString(content) > 250 {
 		return errors.New("invalid content length")
 	}
-	if parentCommentID == nil {
+	if parentCommentIDStr == "" {
 		err = s.repo.CreateComment(ctx, tx, postID, profileID, content)
 		if err != nil {
 			return err
 		}
 	} else {
-		parentPostID, err := s.repo.GetPostIDFromComment(ctx, tx, *parentCommentID)
+		parentCommentID, err := uuid.Parse(parentCommentIDStr)
+		if err != nil {
+			return err
+		}
+		parentPostID, err := s.repo.GetPostIDFromComment(ctx, tx, parentCommentID)
 		if err != nil {
 			return err
 		}
 		if parentPostID != postID {
 			return errors.New("comment references to another post")
 		}
-		err = s.repo.CreateCommentWithParent(ctx, tx, postID, profileID, *parentCommentID, content)
+		err = s.repo.CreateCommentWithParent(ctx, tx, postID, profileID, parentCommentID, content)
 		if err != nil {
 			return err
 		}
@@ -374,4 +403,215 @@ func (s *PostService) DeleteCommentLike(commentID, profileID uuid.UUID) error {
 		return err
 	}
 	return tx.Commit(ctx)
+}
+
+func (s *PostService) GetComment(commentID, profileID uuid.UUID) (*models.Comment, *models.Profile, bool, error) {
+	ctx := context.Background()
+	tx, err := s.repo.DB.Begin(ctx)
+	if err != nil {
+		return nil, nil, false, err
+	}
+	defer tx.Rollback(ctx)
+	comment, err := s.repo.GetComment(ctx, tx, commentID)
+	if err != nil {
+		return nil, nil, false, err
+	}
+	authorID, err := s.repo.GetAuthorId(ctx, tx, comment.PostID)
+	if err != nil {
+		return nil, nil, false, err
+	}
+	author, err := s.accountClient.ProfileMinimum(authorID)
+	if err != nil {
+		return nil, nil, false, err
+	}
+	isLiked, err := s.repo.CheckCommentLike(ctx, tx, commentID, profileID)
+	if err != nil {
+		return nil, nil, false, err
+	}
+	return comment, author, isLiked, nil
+}
+
+func (s *PostService) DeleteComment(commentID, profileID uuid.UUID) error {
+	ctx := context.Background()
+	tx, err := s.repo.DB.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	authorID, err := s.repo.GetProfileIDFromComment(ctx, tx, commentID)
+	if err != nil {
+		return err
+	}
+	if authorID != profileID {
+		return errors.New("not allowed to delete comment")
+	}
+	err = s.repo.DeleteComment(ctx, tx, commentID)
+	if err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
+func (s *PostService) PublishPost(postID, profileID uuid.UUID) error {
+	ctx := context.Background()
+	tx, err := s.repo.DB.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	authorID, err := s.repo.GetAuthorId(ctx, tx, postID)
+	if err != nil {
+		return err
+	}
+	if authorID != profileID {
+		return errors.New("not allowed to publish post")
+	}
+	status, err := s.repo.GetPostStatus(ctx, tx, postID)
+	if err != nil {
+		return err
+	}
+	if status == "published" {
+		return errors.New("already published")
+	}
+	err = s.repo.PublishPost(ctx, tx, postID)
+	if err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
+func (s *PostService) GetPosts(authorID, profileID uuid.UUID, status string, offset, limit int) ([]models.PostResponse, error) {
+	ctx := context.Background()
+	tx, err := s.repo.DB.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx)
+	if status != "published" && authorID != profileID {
+		return nil, errors.New("not allowed to get posts")
+	}
+	author, err := s.accountClient.ProfileMinimum(authorID)
+	if err != nil {
+		return nil, err
+	}
+	posts, err := s.repo.GetPosts(ctx, tx, authorID, status, offset, limit)
+	if err != nil {
+		return nil, err
+	}
+	var postsResp []models.PostResponse
+	for _, post := range posts {
+		images, err := s.repo.GetImages(ctx, tx, post.PostID)
+		if err != nil {
+			return nil, err
+		}
+		hashtags, err := s.repo.GetPostHashtags(ctx, tx, post.PostID)
+		if err != nil {
+			return nil, err
+		}
+		var postResp models.PostResponse
+		if status != "published" {
+			postResp = models.PostResponse{
+				Author:         *author,
+				PostID:         post.PostID,
+				Content:        post.Content,
+				Images:         images,
+				Hashtags:       hashtags,
+				LikesAmount:    post.LikesAmount,
+				CommentsAmount: post.CommentsAmount,
+				RepostsAmount:  post.RepostsAmount,
+				LastEditedAt:   post.LastEditedAt,
+			}
+		} else {
+			isLiked, err := s.repo.CheckLike(ctx, tx, profileID, post.PostID)
+			if err != nil {
+				return nil, err
+			}
+			isReposted, err := s.repo.CheckRepost(ctx, tx, profileID, post.PostID)
+			if err != nil {
+				return nil, err
+			}
+			postResp = models.PostResponse{
+				Author:         *author,
+				PostID:         post.PostID,
+				Content:        post.Content,
+				Images:         images,
+				Hashtags:       hashtags,
+				LikesAmount:    post.LikesAmount,
+				CommentsAmount: post.CommentsAmount,
+				RepostsAmount:  post.RepostsAmount,
+				PublishedAt:    *post.PublishedAt,
+				IsLiked:        isLiked,
+				IsReposted:     isReposted,
+			}
+		}
+		postsResp = append(postsResp, postResp)
+	}
+	return postsResp, tx.Commit(ctx)
+}
+
+func (s *PostService) GetComments(profileID, postID uuid.UUID, limit, offset int) ([]models.CommentResponse, error) {
+	ctx := context.Background()
+	tx, err := s.repo.DB.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx)
+	comments, err := s.repo.GetComments(ctx, tx, postID, limit, offset)
+	log.Print(comments)
+	if err != nil {
+		return nil, err
+	}
+	var commentsResp []models.CommentResponse
+	for _, comment := range comments {
+		author, err := s.accountClient.ProfileMinimum(comment.ProfileID)
+		if err != nil {
+			return nil, err
+		}
+		isLiked, err := s.repo.CheckCommentLike(ctx, tx, comment.CommentID, comment.ProfileID)
+		if err != nil {
+			return nil, err
+		}
+		commentsResp = append(commentsResp, models.CommentResponse{
+			Author:      *author,
+			CommentID:   comment.CommentID,
+			Content:     comment.Content,
+			LikesAmount: comment.LikesAmount,
+			CreatedAt:   comment.CreatedAt,
+			IsLiked:     isLiked,
+		})
+	}
+	return commentsResp, tx.Commit(ctx)
+}
+
+func (s *PostService) GetCommentAnswers(profileID, commentID uuid.UUID, limit, offset int) ([]models.CommentResponse, error) {
+	ctx := context.Background()
+	tx, err := s.repo.DB.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx)
+	comments, err := s.repo.GetCommentAnswers(ctx, tx, commentID, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	var commentsResp []models.CommentResponse
+	for _, comment := range comments {
+		author, err := s.accountClient.ProfileMinimum(comment.ProfileID)
+		if err != nil {
+			return nil, err
+		}
+		isLiked, err := s.repo.CheckCommentLike(ctx, tx, comment.CommentID, comment.ProfileID)
+		if err != nil {
+			return nil, err
+		}
+		commentsResp = append(commentsResp, models.CommentResponse{
+			Author:      *author,
+			CommentID:   comment.CommentID,
+			Content:     comment.Content,
+			LikesAmount: comment.LikesAmount,
+			CreatedAt:   comment.CreatedAt,
+			IsLiked:     isLiked,
+		})
+	}
+	return commentsResp, tx.Commit(ctx)
 }

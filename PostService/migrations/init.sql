@@ -4,7 +4,7 @@ create table if not exists post(
     content varchar(250) not null check (length(content) > 0),
     published_at timestamp,
     last_edited_at timestamp not null default now(),
-    status text not null default 'draft' check(status in ('draft', 'published', 'banned','deleted')),
+    status text not null default 'draft' check(status in ('draft', 'published', 'banned')),
     likes_amount int not null default 0 check(likes_amount >= 0),
     comments_amount int not null default 0 check(comments_amount >= 0),
     reposts_amount int not null default 0 check(reposts_amount >= 0),

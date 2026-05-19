@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"postService/models"
 	"postService/service"
-	"time"
+	"strconv"
 )
 
 type PostHandler struct {
@@ -38,6 +38,32 @@ func parseIdParam(c *gin.Context) (*uuid.UUID, error) {
 		return nil, err
 	}
 	return &postId, nil
+}
+
+func parseOffsetQuery(c *gin.Context) (*int, error) {
+	offsetStr := c.Query("offset")
+	if offsetStr == "" {
+		offset := 0
+		return &offset, nil
+	}
+	offset, err := strconv.Atoi(offsetStr)
+	if err != nil {
+		return nil, err
+	}
+	return &offset, nil
+}
+
+func parseLimitQuery(c *gin.Context) (*int, error) {
+	limitStr := c.Query("limit")
+	if limitStr == "" {
+		limit := 20
+		return &limit, nil
+	}
+	limit, err := strconv.Atoi(limitStr)
+	if err != nil {
+		return nil, err
+	}
+	return &limit, nil
 }
 
 type SuccessResponse struct {
@@ -106,20 +132,6 @@ func (h *PostHandler) DeletePost(c *gin.Context) {
 	c.JSON(http.StatusOK, SuccessResponse{Success: true})
 }
 
-type PostResponse struct {
-	Author         models.Profile       `json:"author"`
-	PostID         uuid.UUID            `json:"post_id"`
-	Content        string               `json:"content"`
-	Images         []models.ImageList   `json:"images"`
-	Hashtags       []models.HashtagList `json:"hashtags"`
-	LikesAmount    int                  `json:"likes_amount"`
-	CommentsAmount int                  `json:"comments_amount"`
-	RepostsAmount  int                  `json:"reposts_amount"`
-	PublishedAt    time.Time            `json:"published_at"`
-	IsLiked        bool                 `json:"is_liked"`
-	IsReposted     bool                 `json:"is_reposted"`
-}
-
 func (h *PostHandler) GetPost(c *gin.Context) {
 	profileID, err := parseProfileHeader(c)
 	if err != nil {
@@ -136,19 +148,35 @@ func (h *PostHandler) GetPost(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, PostResponse{
-		Author:         *profile,
-		PostID:         post.PostID,
-		Content:        post.Content,
-		Images:         images,
-		Hashtags:       hashtags,
-		LikesAmount:    post.LikesAmount,
-		CommentsAmount: post.CommentsAmount,
-		RepostsAmount:  post.RepostsAmount,
-		PublishedAt:    *post.PublishedAt,
-		IsLiked:        liked,
-		IsReposted:     reposted,
-	})
+	if post.Status == "published" {
+		c.JSON(http.StatusOK, models.PostResponse{
+			Author:         *profile,
+			PostID:         post.PostID,
+			Content:        post.Content,
+			Images:         images,
+			Hashtags:       hashtags,
+			LikesAmount:    post.LikesAmount,
+			CommentsAmount: post.CommentsAmount,
+			RepostsAmount:  post.RepostsAmount,
+			PublishedAt:    *post.PublishedAt,
+			IsLiked:        liked,
+			IsReposted:     reposted,
+		})
+	} else {
+		c.JSON(http.StatusOK, models.PostResponse{
+			Author:         *profile,
+			PostID:         post.PostID,
+			Content:        post.Content,
+			Images:         images,
+			Hashtags:       hashtags,
+			LikesAmount:    post.LikesAmount,
+			CommentsAmount: post.CommentsAmount,
+			RepostsAmount:  post.RepostsAmount,
+			LastEditedAt:   post.LastEditedAt,
+			IsLiked:        liked,
+			IsReposted:     reposted,
+		})
+	}
 }
 
 func (h *PostHandler) CreateLike(c *gin.Context) {
@@ -256,8 +284,8 @@ func (h *PostHandler) CreateReport(c *gin.Context) {
 }
 
 type CommentRequest struct {
-	Content         string    `json:"content"`
-	ParentCommentID uuid.UUID `json:"parent_comment_id"`
+	Content         string `json:"content"`
+	ParentCommentID string `json:"parent_comment_id"`
 }
 
 func (h *PostHandler) CreateComment(c *gin.Context) {
@@ -276,7 +304,7 @@ func (h *PostHandler) CreateComment(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	err = h.service.CreateComment(*postId, *profileId, req.Content, &req.ParentCommentID)
+	err = h.service.CreateComment(*postId, *profileId, req.Content, req.ParentCommentID)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -320,4 +348,190 @@ func (h *PostHandler) DeleteCommentLike(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, SuccessResponse{Success: true})
+}
+
+func (h *PostHandler) GetComment(c *gin.Context) {
+	profileId, err := parseProfileHeader(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		return
+	}
+	commentId, err := parseIdParam(c)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	comment, author, isLiked, err := h.service.GetComment(*commentId, *profileId)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, models.CommentResponse{
+		Author:      *author,
+		CommentID:   comment.CommentID,
+		Content:     comment.Content,
+		LikesAmount: comment.LikesAmount,
+		CreatedAt:   comment.CreatedAt,
+		IsLiked:     isLiked,
+	})
+}
+
+func (h *PostHandler) DeleteComment(c *gin.Context) {
+	profileId, err := parseProfileHeader(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		return
+	}
+	commentId, err := parseIdParam(c)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	err = h.service.DeleteComment(*commentId, *profileId)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, SuccessResponse{Success: true})
+}
+
+func (h *PostHandler) PublishPost(c *gin.Context) {
+	profileId, err := parseProfileHeader(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		return
+	}
+	postId, err := parseIdParam(c)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	err = h.service.PublishPost(*postId, *profileId)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, SuccessResponse{Success: true})
+}
+
+type Posts struct {
+	Posts []models.PostResponse `json:"posts"`
+}
+
+func (h *PostHandler) GetPostsMe(c *gin.Context) {
+	profileId, err := parseProfileHeader(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		return
+	}
+	status := c.Param("status")
+	if status != "published" && status != "drafts" && status != "banned" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid status"})
+	}
+	offset, err := parseOffsetQuery(c)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	limit, err := parseLimitQuery(c)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	posts, err := h.service.GetPosts(*profileId, *profileId, status, *offset, *limit)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, Posts{Posts: posts})
+}
+
+func (h *PostHandler) GetPosts(c *gin.Context) {
+	profileId, err := parseProfileHeader(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		return
+	}
+	authorId, err := parseIdParam(c)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	offset, err := parseOffsetQuery(c)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	limit, err := parseLimitQuery(c)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	posts, err := h.service.GetPosts(*authorId, *profileId, "published", *offset, *limit)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, Posts{Posts: posts})
+}
+
+type Comments struct {
+	Comments []models.CommentResponse `json:"comments"`
+}
+
+func (h *PostHandler) GetComments(c *gin.Context) {
+	profileId, err := parseProfileHeader(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		return
+	}
+	postId, err := parseIdParam(c)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	offset, err := parseOffsetQuery(c)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	limit, err := parseLimitQuery(c)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	comments, err := h.service.GetComments(*profileId, *postId, *limit, *offset)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	}
+	c.JSON(http.StatusOK, Comments{Comments: comments})
+}
+
+func (h *PostHandler) GetCommentAnswers(c *gin.Context) {
+	profileId, err := parseProfileHeader(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		return
+	}
+	commentId, err := parseIdParam(c)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	offset, err := parseOffsetQuery(c)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	limit, err := parseLimitQuery(c)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	comments, err := h.service.GetCommentAnswers(*profileId, *commentId, *limit, *offset)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, Comments{Comments: comments})
 }

@@ -46,3 +46,18 @@ type Profile struct {
 	Username  string    `json:"username"`
 	Avatar    string    `json:"avatar"`
 }
+
+type PostResponse struct {
+	Author         Profile       `json:"author"`
+	PostID         uuid.UUID     `json:"post_id"`
+	Content        string        `json:"content"`
+	Images         []ImageList   `json:"images"`
+	Hashtags       []HashtagList `json:"hashtags"`
+	LikesAmount    int           `json:"likes_amount"`
+	CommentsAmount int           `json:"comments_amount"`
+	RepostsAmount  int           `json:"reposts_amount"`
+	LastEditedAt   time.Time     `json:"last_edited_at"`
+	PublishedAt    time.Time     `json:"published_at"`
+	IsLiked        bool          `json:"is_liked"`
+	IsReposted     bool          `json:"is_reposted"`
+}
