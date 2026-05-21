@@ -3,6 +3,7 @@ package main
 import (
 	"accountService/db"
 	"accountService/handler"
+	"accountService/kafka"
 	"accountService/repository"
 	"accountService/service"
 	"github.com/gin-gonic/gin"
@@ -19,6 +20,8 @@ func main() {
 	repoAuth := repository.NewAuthRepository(database)
 	serviceAuth := service.NewAuthService(repoAuth)
 	handlerAuth := handler.NewAuthHandler(serviceAuth)
+
+	consumer := kafka.NewConsumer()
 
 	router := gin.Default()
 
@@ -50,9 +53,9 @@ func main() {
 	router.GET("/users/me", handlerUsers.GetProfileMe)
 	router.GET("/users/:id", handlerUsers.GetProfileById)
 	router.POST("/users/:id/follow", handlerUsers.Follow)
-	router.POST("/users/:id/unfollow", handlerUsers.Unfollow)
+	router.DELETE("/users/:id/follow", handlerUsers.Unfollow)
 	router.POST("/users/:id/block", handlerUsers.Block)
-	router.POST("/users/:id/unblock", handlerUsers.Unblock)
+	router.DELETE("/users/:id/block", handlerUsers.Unblock)
 	router.GET("/users/me/followers", handlerUsers.GetFollowers)
 	router.GET("/users/:id/followers", handlerUsers.GetFollowersById)
 	router.GET("/users/me/following", handlerUsers.GetFollowings)
@@ -60,6 +63,16 @@ func main() {
 	router.GET("/users/me/blacklist", handlerUsers.GetBlacklist)
 	router.GET("/users/search/by-name", handlerUsers.SearchByName)
 	router.GET("/users/search", handlerUsers.SearchByUsername)
-	router.Run(":8080")
 
+	//Внутренние запросы
+	router.GET("/internal/users/:id/exists", handlerUsers.UserExists)
+	router.GET("/internal/users/:id/profile", handlerUsers.GetProfileMinimum)
+
+	go func() {
+		log.Println("Kafka consumer started")
+		consumer.ConsumePostCreated(repoUsers)
+		consumer.ConsumePostDeleted(repoUsers)
+	}()
+
+	router.Run(":8080")
 }

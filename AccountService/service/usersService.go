@@ -317,3 +317,31 @@ func (s *UsersService) SearchByUsername(searchUsername string, limit, offset int
 	}
 	return profiles, tx.Commit(ctx)
 }
+
+func (s *UsersService) ProfileExists(profileID uuid.UUID) (bool, error) {
+	ctx := context.Background()
+	tx, err := s.repo.DB.Begin(ctx)
+	if err != nil {
+		return false, err
+	}
+	defer tx.Rollback(ctx)
+	exists, err := s.repo.ProfileExists(ctx, tx, profileID)
+	if err != nil {
+		return false, err
+	}
+	return exists, tx.Commit(ctx)
+}
+
+func (s *UsersService) GetProfileMinimum(profileID uuid.UUID) (*models.ProfileMinimum, error) {
+	ctx := context.Background()
+	tx, err := s.repo.DB.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx)
+	profileMinimum, err := s.repo.GetProfileMinimumById(ctx, tx, profileID)
+	if err != nil {
+		return nil, err
+	}
+	return profileMinimum, tx.Commit(ctx)
+}

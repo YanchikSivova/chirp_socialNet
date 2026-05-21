@@ -68,6 +68,11 @@ create table if not exists password_change(
     foreign key (credentials_id) references credentials(credentials_id) on delete cascade
 );
 
+create table if not exists processed_events(
+    event_id UUID primary key,
+    processed_at timestamp not null default now()
+);
+
 --Обновление количества подписчиков и подписок после подписки/отписки
 create or replace function update_subscription_counts()
 returns trigger as $$

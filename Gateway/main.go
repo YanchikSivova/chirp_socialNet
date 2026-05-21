@@ -11,6 +11,7 @@ func main() {
 	r := gin.Default()
 
 	accountProxy, err := proxy.NewReverseProxy("http://account-service:8080")
+	postProxy, err := proxy.NewReverseProxy("http://post-service:8181")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -37,11 +38,36 @@ func main() {
 		protectedAuth.POST("/me/delete/*path", proxy.ProxyHandler(accountProxy))
 	}
 	//PROTECTED routes
-	protected := r.Group("/users")
-	protected.Use(middleware.AuthMiddleware())
+	protectedUsers := r.Group("/users")
+	protectedUsers.Use(middleware.AuthMiddleware())
 	{
-		protected.Any("/*path", proxy.ProxyHandler(accountProxy))
+		protectedUsers.POST("/check-username", proxy.ProxyHandler(accountProxy))
+		protectedUsers.Any("/me/profile", proxy.ProxyHandler(accountProxy))
+		protectedUsers.GET("/me", proxy.ProxyHandler(accountProxy))
+		protectedUsers.GET("/:id", proxy.ProxyHandler(accountProxy))
+		protectedUsers.Any("/:id/follow", proxy.ProxyHandler(accountProxy))
+		protectedUsers.Any("/:id/block", proxy.ProxyHandler(accountProxy))
+		protectedUsers.Any("/:id/followers", proxy.ProxyHandler(accountProxy))
+		protectedUsers.Any("/:id/following", proxy.ProxyHandler(accountProxy))
+		protectedUsers.GET("/me/followers", proxy.ProxyHandler(accountProxy))
+		protectedUsers.GET("/me/following", proxy.ProxyHandler(accountProxy))
+		protectedUsers.GET("/me/blacklist", proxy.ProxyHandler(accountProxy))
+		protectedUsers.GET("/search/by-name", proxy.ProxyHandler(accountProxy))
+		protectedUsers.GET("/search", proxy.ProxyHandler(accountProxy))
+		protectedUsers.GET("/me/posts/*path", proxy.ProxyHandler(postProxy))
+		protectedUsers.GET("/:id/posts", proxy.ProxyHandler(postProxy))
+	}
 
+	protectedPosts := r.Group("/posts")
+	protectedPosts.Use(middleware.AuthMiddleware())
+	{
+		protectedPosts.Any("", proxy.ProxyHandler(postProxy))
+		protectedPosts.Any("/*path", proxy.ProxyHandler(postProxy))
+	}
+	protectedComments := r.Group("/comments")
+	protectedComments.Use(middleware.AuthMiddleware())
+	{
+		protectedComments.Any("/*path", proxy.ProxyHandler(postProxy))
 	}
 	r.Run(":8000")
 }
