@@ -7,6 +7,7 @@ import (
 	"postService/client"
 	"postService/db"
 	"postService/handler"
+	"postService/kafka"
 	"postService/repository"
 	"postService/service"
 )
@@ -20,7 +21,9 @@ func main() {
 
 	postRepository := repository.NewPostRepository(database)
 	accountClient := client.NewAccountClient()
-	postService := service.NewPostService(postRepository, accountClient)
+	postProducer := kafka.NewProducer()
+	defer postProducer.Close()
+	postService := service.NewPostService(postRepository, accountClient, postProducer)
 	postHandler := handler.NewPostHandler(postService)
 
 	router := gin.Default()

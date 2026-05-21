@@ -7,6 +7,8 @@ import (
 	"github.com/jackc/pgx/v5"
 	"log"
 	"postService/client"
+	"postService/kafka"
+	"postService/kafkaEvents"
 	"postService/models"
 	"postService/repository"
 	"unicode/utf8"
@@ -15,10 +17,11 @@ import (
 type PostService struct {
 	repo          *repository.PostRepository
 	accountClient *client.AccountClient
+	producer      *kafka.Producer
 }
 
-func NewPostService(repo *repository.PostRepository, ac *client.AccountClient) *PostService {
-	return &PostService{repo, ac}
+func NewPostService(repo *repository.PostRepository, ac *client.AccountClient, pr *kafka.Producer) *PostService {
+	return &PostService{repo, ac, pr}
 }
 
 func (s *PostService) CreatePost(profileID uuid.UUID, postRequest models.CreatePostRequest) error {
@@ -97,7 +100,24 @@ func (s *PostService) CreatePost(profileID uuid.UUID, postRequest models.CreateP
 			return err
 		}
 	}
-	return tx.Commit(ctx)
+	err = tx.Commit(ctx)
+	if err != nil {
+		return err
+	}
+	if post.Status == "published" {
+		log.Println("started to form kafka event")
+		event := kafkaEvents.PostEvent{
+			EventID:   uuid.New(),
+			ProfileID: profileID,
+			PostID:    post.PostID,
+		}
+		err = s.producer.SendPostCreated(ctx, event)
+		if err != nil {
+			log.Println(err)
+		}
+	}
+
+	return nil
 }
 
 func (s *PostService) UpdatePost(profileID, postID uuid.UUID, postReq models.UpdatePostRequest) error {
@@ -128,7 +148,7 @@ func (s *PostService) UpdatePost(profileID, postID uuid.UUID, postReq models.Upd
 	if err != nil {
 		return err
 	}
-	// Удаляем хэштеги чтобы перезаписать заново новые
+	// Удаляем изображения чтобы перезаписать заново новые
 	err = s.repo.DeleteImages(ctx, tx, postID)
 	if err != nil {
 		return err
@@ -186,18 +206,38 @@ func (s *PostService) DeletePost(profileID, postID uuid.UUID) error {
 		return err
 	}
 	defer tx.Rollback(ctx)
-	authorID, err := s.repo.GetAuthorId(ctx, tx, profileID)
+	authorID, err := s.repo.GetAuthorId(ctx, tx, postID)
 	if err != nil {
 		return err
 	}
 	if authorID != profileID {
 		return errors.New("invalid author id")
 	}
+	status, err := s.repo.GetPostStatus(ctx, tx, postID)
+	if err != nil {
+		return err
+	}
 	err = s.repo.DeletePost(ctx, tx, postID)
 	if err != nil {
 		return err
 	}
-	return tx.Commit(ctx)
+	err = tx.Commit(ctx)
+	if err != nil {
+		return err
+	}
+	if status == "published" {
+		log.Println("started to form kafka event")
+		event := kafkaEvents.PostEvent{
+			EventID:   uuid.New(),
+			ProfileID: profileID,
+			PostID:    postID,
+		}
+		err = s.producer.SendPostDeleted(ctx, event)
+		if err != nil {
+			log.Println(err)
+		}
+	}
+	return nil
 }
 
 func (s *PostService) GetPost(postID, profileID uuid.UUID) (*models.Post, *models.Profile, []models.ImageList, []models.HashtagList, bool, bool, error) {
@@ -477,7 +517,22 @@ func (s *PostService) PublishPost(postID, profileID uuid.UUID) error {
 	if err != nil {
 		return err
 	}
-	return tx.Commit(ctx)
+	err = tx.Commit(ctx)
+	if err != nil {
+		return err
+	}
+	log.Println("started to form kafka event")
+	event := kafkaEvents.PostEvent{
+		EventID:   uuid.New(),
+		ProfileID: profileID,
+		PostID:    postID,
+	}
+	err = s.producer.SendPostCreated(ctx, event)
+	if err != nil {
+		log.Println(err)
+	}
+
+	return nil
 }
 
 func (s *PostService) GetPosts(authorID, profileID uuid.UUID, status string, offset, limit int) ([]models.PostResponse, error) {
@@ -522,11 +577,11 @@ func (s *PostService) GetPosts(authorID, profileID uuid.UUID, status string, off
 				LastEditedAt:   post.LastEditedAt,
 			}
 		} else {
-			isLiked, err := s.repo.CheckLike(ctx, tx, profileID, post.PostID)
+			isLiked, err := s.repo.CheckLike(ctx, tx, post.PostID, profileID)
 			if err != nil {
 				return nil, err
 			}
-			isReposted, err := s.repo.CheckRepost(ctx, tx, profileID, post.PostID)
+			isReposted, err := s.repo.CheckRepost(ctx, tx, post.PostID, profileID)
 			if err != nil {
 				return nil, err
 			}

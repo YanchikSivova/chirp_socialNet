@@ -3,6 +3,7 @@ package main
 import (
 	"accountService/db"
 	"accountService/handler"
+	"accountService/kafka"
 	"accountService/repository"
 	"accountService/service"
 	"github.com/gin-gonic/gin"
@@ -19,6 +20,8 @@ func main() {
 	repoAuth := repository.NewAuthRepository(database)
 	serviceAuth := service.NewAuthService(repoAuth)
 	handlerAuth := handler.NewAuthHandler(serviceAuth)
+
+	consumer := kafka.NewConsumer()
 
 	router := gin.Default()
 
@@ -64,6 +67,12 @@ func main() {
 	//Внутренние запросы
 	router.GET("/internal/users/:id/exists", handlerUsers.UserExists)
 	router.GET("/internal/users/:id/profile", handlerUsers.GetProfileMinimum)
-	router.Run(":8080")
 
+	go func() {
+		log.Println("Kafka consumer started")
+		consumer.ConsumePostCreated(repoUsers)
+		consumer.ConsumePostDeleted(repoUsers)
+	}()
+
+	router.Run(":8080")
 }

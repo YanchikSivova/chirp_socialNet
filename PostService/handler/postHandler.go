@@ -425,8 +425,9 @@ func (h *PostHandler) GetPostsMe(c *gin.Context) {
 		return
 	}
 	status := c.Param("status")
-	if status != "published" && status != "drafts" && status != "banned" {
+	if status != "published" && status != "draft" && status != "banned" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid status"})
+		return
 	}
 	offset, err := parseOffsetQuery(c)
 	if err != nil {

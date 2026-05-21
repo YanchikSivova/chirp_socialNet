@@ -264,3 +264,23 @@ func (r *UsersRepository) GetProfileMinimumById(ctx context.Context, tx pgx.Tx, 
 	)
 	return &profile, err
 }
+
+func (r *UsersRepository) CheckProcessedEvent(ctx context.Context, tx pgx.Tx, eventID uuid.UUID) (bool, error) {
+	var processed bool
+	err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM processed_events WHERE event_id=$1)`, eventID).Scan(&processed)
+	return processed, err
+}
+
+func (r *UsersRepository) SaveProcessedEvent(ctx context.Context, tx pgx.Tx, eventID uuid.UUID) error {
+	_, err := tx.Exec(ctx, `INSERT INTO processed_events (event_id) VALUES ($1)`, eventID)
+	return err
+}
+func (r *UsersRepository) IncrementPostsAmount(ctx context.Context, tx pgx.Tx, profileID uuid.UUID) error {
+	_, err := tx.Exec(ctx, `UPDATE profile SET posts_amount=posts_amount+1 WHERE profile_id=$1`, profileID)
+	return err
+}
+
+func (r *UsersRepository) DecrementPostsAmount(ctx context.Context, tx pgx.Tx, profileID uuid.UUID) error {
+	_, err := tx.Exec(ctx, `UPDATE profile SET posts_amount = posts_amount-1 WHERE profile_id=$1`, profileID)
+	return err
+}
