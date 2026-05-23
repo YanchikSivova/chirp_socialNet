@@ -67,6 +67,8 @@ func main() {
 	//Внутренние запросы
 	router.GET("/internal/users/:id/exists", handlerUsers.UserExists)
 	router.GET("/internal/users/:id/profile", handlerUsers.GetProfileMinimum)
+	router.GET("/internal/users/:id/followers", handlerUsers.GetFollowersID)
+	router.POST("/internal/relationship", handlerUsers.GetRelationships)
 
 	go func() {
 		log.Println("Kafka consumer started")

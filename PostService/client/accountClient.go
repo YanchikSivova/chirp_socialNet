@@ -1,9 +1,11 @@
 package client
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"github.com/google/uuid"
+	"log"
 	"net/http"
 	"postService/models"
 )
@@ -64,4 +66,40 @@ func (c *AccountClient) ProfileMinimum(profileID uuid.UUID) (*models.Profile, er
 		return nil, err
 	}
 	return &profile, nil
+}
+
+type RelationshipRequest struct {
+	ProfileID uuid.UUID `json:"profile_id"`
+	AuthorID  uuid.UUID `json:"author_id"`
+}
+
+type RelationshipResponse struct {
+	Relationship string `json:"relationship"`
+}
+
+func (c *AccountClient) GetRelationship(profileID, authorID uuid.UUID) (string, error) {
+	url := fmt.Sprintf("%v/internal/relationship", c.baseURL)
+	req := RelationshipRequest{
+		ProfileID: profileID,
+		AuthorID:  authorID,
+	}
+	body, err := json.Marshal(req)
+	if err != nil {
+		return "", err
+	}
+	resp, err := c.client.Post(url, "application/json", bytes.NewBuffer(body))
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+	}
+	var relationship RelationshipResponse
+	err = json.NewDecoder(resp.Body).Decode(&relationship)
+	if err != nil {
+		return "", err
+	}
+	log.Println(relationship.Relationship)
+	return relationship.Relationship, nil
 }
