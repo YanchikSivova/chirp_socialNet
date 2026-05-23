@@ -69,5 +69,10 @@ func main() {
 	{
 		protectedComments.Any("/*path", proxy.ProxyHandler(postProxy))
 	}
+	protectedFeeds := r.Group("/feed")
+	protectedFeeds.Use(middleware.AuthMiddleware())
+	{
+		protectedFeeds.Any("", proxy.ProxyHandler(postProxy))
+	}
 	r.Run(":8000")
 }

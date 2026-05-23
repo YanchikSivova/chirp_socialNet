@@ -21,9 +21,10 @@ func main() {
 
 	postRepository := repository.NewPostRepository(database)
 	accountClient := client.NewAccountClient()
+	feedClent := client.NewFeedClient()
 	postProducer := kafka.NewProducer()
 	defer postProducer.Close()
-	postService := service.NewPostService(postRepository, accountClient, postProducer)
+	postService := service.NewPostService(postRepository, accountClient, feedClent, postProducer)
 	postHandler := handler.NewPostHandler(postService)
 
 	router := gin.Default()
@@ -47,6 +48,7 @@ func main() {
 	router.GET("/users/:id/posts", postHandler.GetPosts)
 	router.GET("/posts/:id/comments", postHandler.GetComments)
 	router.GET("/comments/:id/answers", postHandler.GetCommentAnswers)
+	router.GET("/feed", postHandler.GetFeed)
 
 	router.Run(":8181")
 }

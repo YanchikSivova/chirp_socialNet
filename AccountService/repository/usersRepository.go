@@ -284,3 +284,27 @@ func (r *UsersRepository) DecrementPostsAmount(ctx context.Context, tx pgx.Tx, p
 	_, err := tx.Exec(ctx, `UPDATE profile SET posts_amount = posts_amount-1 WHERE profile_id=$1`, profileID)
 	return err
 }
+
+func (r *UsersRepository) GetFollowersID(ctx context.Context, tx pgx.Tx, profileID uuid.UUID) ([]uuid.UUID, error) {
+	var followers []uuid.UUID
+	rows, err := tx.Query(ctx, `SELECT subscriber_id FROM subscription WHERE subscribed_id=$1`, profileID)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return []uuid.UUID{}, nil
+		}
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var followerId uuid.UUID
+		err = rows.Scan(&followerId)
+		if err != nil {
+			return nil, err
+		}
+		followers = append(followers, followerId)
+	}
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+	return followers, nil
+}

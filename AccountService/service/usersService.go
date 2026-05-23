@@ -130,7 +130,7 @@ func (s *UsersService) GetRelationship(meProfileId, profileId uuid.UUID) (string
 	if err != nil {
 		return "", err
 	}
-	isAnotherBlocked, err := s.repo.CheckIsBlocked(ctx, tx, meProfileId, profileId)
+	isAnotherBlocked, err := s.repo.CheckIsBlocked(ctx, tx, profileId, meProfileId)
 	if err != nil {
 		return "", err
 	}
@@ -159,15 +159,6 @@ func (s *UsersService) Follow(subscriberID, subscribedID uuid.UUID) error {
 	if err != nil {
 		return err
 	}
-
-	/*err = s.repo.UpdateFollowersAmount(ctx, tx, subscribedID)
-	if err != nil {
-		return err
-	}
-	err = s.repo.UpdateFollowingsAmount(ctx, tx, subscriberID)
-	if err != nil {
-		return err
-	}*/
 	return tx.Commit(ctx)
 }
 
@@ -182,15 +173,6 @@ func (s *UsersService) Unfollow(subscriberID, subscribedID uuid.UUID) error {
 	if err != nil {
 		return err
 	}
-
-	/*err = s.repo.UpdateFollowersAmount(ctx, tx, subscribedID)
-	if err != nil {
-		return err
-	}
-	err = s.repo.UpdateFollowingsAmount(ctx, tx, subscriberID)
-	if err != nil {
-		return err
-	}*/
 	return tx.Commit(ctx)
 }
 
@@ -206,31 +188,6 @@ func (s *UsersService) Block(bannedProfileId, profileId uuid.UUID) error {
 	if err != nil {
 		return err
 	}
-
-	//err = s.repo.Unfollow(ctx, tx, profileId, bannedProfileId)
-	//if err != nil {
-	//	return err
-	//}
-	//err = s.repo.Unfollow(ctx, tx, bannedProfileId, profileId)
-	//if err != nil {
-	//	return err
-	//}
-	//err = s.repo.UpdateFollowersAmount(ctx, tx, bannedProfileId)
-	//if err != nil {
-	//	return err
-	//}
-	//err = s.repo.UpdateFollowersAmount(ctx, tx, profileId)
-	//if err != nil {
-	//	return err
-	//}
-	//err = s.repo.UpdateFollowingsAmount(ctx, tx, bannedProfileId)
-	//if err != nil {
-	//	return err
-	//}
-	//err = s.repo.UpdateFollowingsAmount(ctx, tx, profileId)
-	//if err != nil {
-	//	return err
-	//}
 	return tx.Commit(ctx)
 }
 
@@ -344,4 +301,18 @@ func (s *UsersService) GetProfileMinimum(profileID uuid.UUID) (*models.ProfileMi
 		return nil, err
 	}
 	return profileMinimum, tx.Commit(ctx)
+}
+
+func (s *UsersService) GetFollowersID(profileID uuid.UUID) ([]uuid.UUID, error) {
+	ctx := context.Background()
+	tx, err := s.repo.DB.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx)
+	followers, err := s.repo.GetFollowersID(ctx, tx, profileID)
+	if err != nil {
+		return nil, err
+	}
+	return followers, tx.Commit(ctx)
 }

@@ -252,6 +252,15 @@ func (h *UsersHandler) Follow(c *gin.Context) {
 	if profileId == nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "no profile_id found"})
 	}
+	relationship, err := h.service.GetRelationship(*meProfileId, *profileId)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if relationship == "blocked" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "blocked"})
+		return
+	}
 	err = h.service.Follow(*meProfileId, *profileId)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -587,5 +596,46 @@ func (h *UsersHandler) GetProfileMinimum(c *gin.Context) {
 		Name:      profile.Name,
 		Username:  profile.Username,
 		Avatar:    profile.Avatar,
+	})
+}
+
+func (h *UsersHandler) GetFollowersID(c *gin.Context) {
+	profileID, err := parseProfileParam(c)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	followers, err := h.service.GetFollowersID(*profileID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, models.Followers{
+		Followers: followers,
+	})
+}
+
+type RelationshipRequest struct {
+	ProfileID uuid.UUID `json:"profile_id"`
+	AuthorID  uuid.UUID `json:"author_id"`
+}
+
+type RelationshipResponse struct {
+	Relationship string `json:"relationship"`
+}
+
+func (h *UsersHandler) GetRelationships(c *gin.Context) {
+	var req RelationshipRequest
+	if err := c.ShouldBind(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	relationship, err := h.service.GetRelationship(req.ProfileID, req.AuthorID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, RelationshipResponse{
+		Relationship: relationship,
 	})
 }

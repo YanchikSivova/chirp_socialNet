@@ -110,6 +110,14 @@ func (c *Consumer) ConsumePostCreated(r *repository.UsersRepository) {
 		log.Println("event parsed:", event.EventID)
 		ctx := context.Background()
 
+		if event.IsRepost {
+			log.Println("repost event received")
+			err = c.postCreatedReader.CommitMessages(ctx, msg)
+			if err != nil {
+				log.Println("commit messages error:", err)
+			}
+			continue
+		}
 		tx, err := r.DB.Begin(ctx)
 		if err != nil {
 			log.Println("begin tx error:", err)

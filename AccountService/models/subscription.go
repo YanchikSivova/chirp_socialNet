@@ -7,3 +7,7 @@ type Subscription struct {
 	SubscriberID   uuid.UUID `json:"subscriber_id"`
 	SubscribedID   uuid.UUID `json:"subscribed_id"`
 }
+
+type Followers struct {
+	Followers []uuid.UUID `json:"followers"`
+}

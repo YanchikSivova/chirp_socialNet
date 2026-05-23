@@ -4,6 +4,7 @@ import (
 	"errors"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"log"
 	"net/http"
 	"postService/models"
 	"postService/service"
@@ -414,10 +415,6 @@ func (h *PostHandler) PublishPost(c *gin.Context) {
 	c.JSON(http.StatusOK, SuccessResponse{Success: true})
 }
 
-type Posts struct {
-	Posts []models.PostResponse `json:"posts"`
-}
-
 func (h *PostHandler) GetPostsMe(c *gin.Context) {
 	profileId, err := parseProfileHeader(c)
 	if err != nil {
@@ -444,7 +441,7 @@ func (h *PostHandler) GetPostsMe(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, Posts{Posts: posts})
+	c.JSON(http.StatusOK, models.Posts{Posts: posts})
 }
 
 func (h *PostHandler) GetPosts(c *gin.Context) {
@@ -473,7 +470,7 @@ func (h *PostHandler) GetPosts(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, Posts{Posts: posts})
+	c.JSON(http.StatusOK, models.Posts{Posts: posts})
 }
 
 type Comments struct {
@@ -535,4 +532,56 @@ func (h *PostHandler) GetCommentAnswers(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, Comments{Comments: comments})
+}
+
+type FeedRequest struct {
+	ProfileID uuid.UUID `json:"profileId"`
+	PostsID   []string  `json:"posts_id"`
+}
+
+func (h *PostHandler) GetFeed(c *gin.Context) {
+	profileID, err := parseProfileHeader(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		return
+	}
+	posts, err := h.service.GetFeedPosts(*profileID)
+	var postsResp models.Posts
+	successCount := 0
+	for _, postID := range posts {
+		post, author, images, hashtags, liked, reposted, err := h.service.GetPost(postID, *profileID)
+		if err != nil {
+			log.Printf("Failed to get post %v", postID)
+			continue
+		}
+		if author.ProfileID == *profileID {
+			continue
+		}
+		if err = h.service.GetRelationship(*profileID, author.ProfileID); err != nil {
+			log.Printf("Invalid relationship: %v", err)
+			continue
+		}
+		postResp := models.PostResponse{
+			Author:         *author,
+			PostID:         post.PostID,
+			Content:        post.Content,
+			Images:         images,
+			Hashtags:       hashtags,
+			LikesAmount:    post.LikesAmount,
+			CommentsAmount: post.CommentsAmount,
+			RepostsAmount:  post.RepostsAmount,
+			PublishedAt:    *post.PublishedAt,
+			IsLiked:        liked,
+			IsReposted:     reposted,
+		}
+		postsResp.Posts = append(postsResp.Posts, postResp)
+		successCount++
+	}
+	if successCount == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "no posts found"})
+		return
+	}
+	c.JSON(http.StatusOK, models.Posts{
+		Posts: postsResp.Posts,
+	})
 }

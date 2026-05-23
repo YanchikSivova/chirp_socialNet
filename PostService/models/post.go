@@ -61,3 +61,7 @@ type PostResponse struct {
 	IsLiked        bool          `json:"is_liked"`
 	IsReposted     bool          `json:"is_reposted"`
 }
+
+type Posts struct {
+	Posts []PostResponse `json:"posts"`
+}

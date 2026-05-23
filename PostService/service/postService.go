@@ -11,17 +11,19 @@ import (
 	"postService/kafkaEvents"
 	"postService/models"
 	"postService/repository"
+	"time"
 	"unicode/utf8"
 )
 
 type PostService struct {
 	repo          *repository.PostRepository
 	accountClient *client.AccountClient
+	feedClient    *client.FeedClient
 	producer      *kafka.Producer
 }
 
-func NewPostService(repo *repository.PostRepository, ac *client.AccountClient, pr *kafka.Producer) *PostService {
-	return &PostService{repo, ac, pr}
+func NewPostService(repo *repository.PostRepository, ac *client.AccountClient, fc *client.FeedClient, pr *kafka.Producer) *PostService {
+	return &PostService{repo, ac, fc, pr}
 }
 
 func (s *PostService) CreatePost(profileID uuid.UUID, postRequest models.CreatePostRequest) error {
@@ -110,6 +112,8 @@ func (s *PostService) CreatePost(profileID uuid.UUID, postRequest models.CreateP
 			EventID:   uuid.New(),
 			ProfileID: profileID,
 			PostID:    post.PostID,
+			IsRepost:  false,
+			CreatedAt: time.Now(),
 		}
 		err = s.producer.SendPostCreated(ctx, event)
 		if err != nil {
@@ -231,6 +235,8 @@ func (s *PostService) DeletePost(profileID, postID uuid.UUID) error {
 			EventID:   uuid.New(),
 			ProfileID: profileID,
 			PostID:    postID,
+			IsRepost:  false,
+			CreatedAt: time.Now(),
 		}
 		err = s.producer.SendPostDeleted(ctx, event)
 		if err != nil {
@@ -337,7 +343,23 @@ func (s *PostService) CreateRepost(postID, profileID uuid.UUID) error {
 	if err != nil {
 		return err
 	}
-	return tx.Commit(ctx)
+	err = tx.Commit(ctx)
+	if err != nil {
+		return err
+	}
+	log.Println("repost created event")
+	event := kafkaEvents.PostEvent{
+		EventID:   uuid.New(),
+		ProfileID: profileID,
+		PostID:    postID,
+		IsRepost:  true,
+		CreatedAt: time.Now(),
+	}
+	err = s.producer.SendPostCreated(ctx, event)
+	if err != nil {
+		log.Println(err)
+	}
+	return nil
 }
 
 func (s *PostService) DeleteRepost(postID, profileID uuid.UUID) error {
@@ -669,4 +691,23 @@ func (s *PostService) GetCommentAnswers(profileID, commentID uuid.UUID, limit, o
 		})
 	}
 	return commentsResp, tx.Commit(ctx)
+}
+
+func (s *PostService) GetFeedPosts(profileID uuid.UUID) ([]uuid.UUID, error) {
+	posts, err := s.feedClient.GetFeedPosts(profileID)
+	if err != nil {
+		return nil, err
+	}
+	return posts, nil
+}
+
+func (s *PostService) GetRelationship(profileID, authorID uuid.UUID) error {
+	relationship, err := s.accountClient.GetRelationship(profileID, authorID)
+	if err != nil {
+		return err
+	}
+	if relationship == "blocked" {
+		return errors.New("blocked")
+	}
+	return nil
 }
