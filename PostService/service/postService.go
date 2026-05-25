@@ -711,3 +711,25 @@ func (s *PostService) GetRelationship(profileID, authorID uuid.UUID) error {
 	}
 	return nil
 }
+
+func (s *PostService) GetPostPreviews(posts models.PostIDs) ([]models.PostPreview, error) {
+	ctx := context.Background()
+	tx, err := s.repo.DB.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx)
+	var postPreviews []models.PostPreview
+	for _, post := range posts.Posts {
+		content, err := s.repo.GetPostsContent(ctx, tx, post)
+		if err != nil {
+			content = ""
+		}
+		preview := models.PostPreview{
+			PostID:  post,
+			Content: content,
+		}
+		postPreviews = append(postPreviews, preview)
+	}
+	return postPreviews, tx.Commit(ctx)
+}

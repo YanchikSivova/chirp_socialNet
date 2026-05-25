@@ -11,7 +11,14 @@ func main() {
 	r := gin.Default()
 
 	accountProxy, err := proxy.NewReverseProxy("http://account-service:8080")
+	if err != nil {
+		log.Fatal(err)
+	}
 	postProxy, err := proxy.NewReverseProxy("http://post-service:8181")
+	if err != nil {
+		log.Fatal(err)
+	}
+	messageProxy, err := proxy.NewReverseProxy("http://message-service:8383")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -74,5 +81,14 @@ func main() {
 	{
 		protectedFeeds.Any("", proxy.ProxyHandler(postProxy))
 	}
+
+	protectedConversations := r.Group("/conversations")
+	protectedConversations.Use(middleware.AuthMiddleware())
+	{
+		protectedConversations.Any("", proxy.ProxyHandler(messageProxy))
+		protectedConversations.Any("/*path", proxy.ProxyHandler(messageProxy))
+	}
+	r.Any("/ws", proxy.ProxyHandler(messageProxy))
+	
 	r.Run(":8000")
 }

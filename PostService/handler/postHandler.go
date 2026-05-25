@@ -585,3 +585,19 @@ func (h *PostHandler) GetFeed(c *gin.Context) {
 		Posts: postsResp.Posts,
 	})
 }
+
+func (h *PostHandler) GetPostPreviews(c *gin.Context) {
+	var req models.PostIDs
+	if c.ShouldBind(&req) != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "bad request"})
+		return
+	}
+	previews, err := h.service.GetPostPreviews(req)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, models.PostPreviews{
+		Posts: previews,
+	})
+}
