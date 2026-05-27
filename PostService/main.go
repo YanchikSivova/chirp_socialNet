@@ -49,7 +49,7 @@ func main() {
 	router.GET("/posts/:id/comments", postHandler.GetComments)
 	router.GET("/comments/:id/answers", postHandler.GetCommentAnswers)
 	router.GET("/feed", postHandler.GetFeed)
-	router.POST("/internal/posts", postHandler.GetPosts)
+	router.POST("/internal/posts", postHandler.GetPostPreviews)
 
 	router.Run(":8181")
 }

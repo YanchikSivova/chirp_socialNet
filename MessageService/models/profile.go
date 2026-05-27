@@ -7,4 +7,5 @@ type Profile struct {
 	Name      string    `json:"name"`
 	Username  string    `json:"username"`
 	Avatar    string    `json:"avatar"`
+	IsOnline  bool      `json:"is_online"`
 }

@@ -2,7 +2,7 @@ create table if not exists conversation(
     conversation_id  uuid primary key,
     created_at timestamp not null default now(),
     updated_at timestamp not null default now(),
-    last_message_id uuid
+    last_message_created_at timestamp
 );
 
 create table if not exists message(
@@ -15,23 +15,11 @@ create table if not exists message(
     foreign key(conversation_id) references conversation(conversation_id) on delete cascade
 );
 
-do $$
-begin
-  if not exists(
-      select 1 from pg_constraint where conname = 'fk_last_message'
-  ) then
-      alter table conversation add constraint fk_last_message
-      foreign key (last_message_id) references message(message_id)
-      on delete set null;
-  end if;
-end $$;
-
 create table if not exists conversation_member(
     conversation_member_id uuid primary key,
     conversation_id uuid not null,
     profile_id uuid not null,
     last_read_message_id uuid,
-    unread_count int not null default 0,
     foreign key (conversation_id) references conversation(conversation_id) on delete cascade,
     foreign key (last_read_message_id) references message(message_id),
     unique(conversation_id, profile_id)
@@ -41,13 +29,15 @@ create index if not exists idx_message_conversation_created on message(conversat
 
 create index if not exists idx_conversation_member_profile on conversation_member(profile_id);
 
-create index if not exists idx_conversation_update_at on conversation(updated_at desc);
+create index if not exists idx_conversation_last_message_created on conversation(last_message_created_at desc);
+
+create index if not exists idx_message_conversation_sender_created on message(conversation_id, sender_id, created_at desc);
 
 create or replace function update_conversation_timestamp()
 returns trigger as $$
 begin
     update conversation
-    set updated_at=NEW.created_at, last_message_id = NEW.message_id
+    set updated_at=NEW.created_at
     where conversation_id = NEW.conversation_id;
 
     return NEW;
@@ -58,22 +48,6 @@ create trigger trigger_update_conversation_timestamp
 after insert on message
 for each row
 execute function update_conversation_timestamp();
-
-create or replace function increment_unread_count()
-returns trigger as $$
-begin
-    update conversation_member
-    set unread_count = unread_count+1
-    where conversation_id =  NEW.conversation_id and profile_id != NEW.sender_id;
-
-    return NEW;
-end;
-$$ language plpgsql;
-
-create trigger trigger_increment_unread_count
-after insert on message
-for each row
-execute function increment_unread_count();
 
 create or replace function check_conversation_member_limit()
 returns trigger as $$

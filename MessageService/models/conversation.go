@@ -13,9 +13,10 @@ type ConversationResponse struct {
 }
 
 type ConversationPreview struct {
-	ConversationID uuid.UUID `json:"conversation_id"`
-	Profile        Profile   `json:"profile"`
-	UnreadCount    int       `json:"unread_count"`
+	ConversationID    uuid.UUID  `json:"conversation_id"`
+	Profile           Profile    `json:"profile"`
+	LastReadMessageID *uuid.UUID `json:"last_read_message_id"`
+	UnreadCount       int        `json:"unread_count"`
 }
 
 type ConversationPreviewList struct {

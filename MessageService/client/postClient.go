@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"log"
 	"messageService/models"
 	"net/http"
 )
@@ -24,6 +25,7 @@ func (c *PostClient) BatchPosts(posts models.PostIDs) (*models.PostPreviews, err
 	url := fmt.Sprintf("%v/internal/posts", c.baseURL)
 	body, err := json.Marshal(&posts)
 	if err != nil {
+		log.Println(err)
 		return nil, err
 	}
 	resp, err := c.client.Post(url, "application/json", bytes.NewBuffer(body))

@@ -111,6 +111,7 @@ func (h *MessageHandler) GetConversation(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	targetProfile.IsOnline = h.hub.IsOnline(targetProfile.ProfileID)
 	c.JSON(http.StatusOK, models.ConversationResponse{
 		ConversationID: *conversationID,
 		Profile:        *targetProfile,
@@ -140,6 +141,7 @@ func (h *MessageHandler) GetConversationList(c *gin.Context) {
 		if err != nil {
 			continue
 		}
+		targetProfile.IsOnline = h.hub.IsOnline(targetProfile.ProfileID)
 		conversations[i].Profile = *targetProfile
 		successCount++
 	}
