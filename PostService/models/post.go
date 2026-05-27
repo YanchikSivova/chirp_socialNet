@@ -65,3 +65,14 @@ type PostResponse struct {
 type Posts struct {
 	Posts []PostResponse `json:"posts"`
 }
+
+type PostIDs struct {
+	Posts []uuid.UUID `json:"posts"`
+}
+type PostPreview struct {
+	PostID  uuid.UUID `json:"post_id"`
+	Content string    `json:"content"`
+}
+type PostPreviews struct {
+	Posts []PostPreview `json:"posts"`
+}

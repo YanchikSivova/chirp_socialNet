@@ -318,3 +318,9 @@ func (r *PostRepository) GetCommentAnswers(ctx context.Context, tx pgx.Tx, comme
 	}
 	return comments, nil
 }
+
+func (r *PostRepository) GetPostsContent(ctx context.Context, tx pgx.Tx, postID uuid.UUID) (string, error) {
+	var content string
+	err := tx.QueryRow(ctx, `SELECT content FROM post WHERE post_id=$1 and status='published'`, postID).Scan(&content)
+	return content, err
+}
