@@ -20,3 +20,7 @@ type ProfileMinimum struct {
 	Username  string    `json:"username"`
 	Avatar    string    `json:"avatar"`
 }
+
+type ProfileIDs struct {
+	Profiles []uuid.UUID `json:"profiles"`
+}

@@ -44,7 +44,8 @@ func main() {
 	router.POST("/auth/me/delete/confirm", handlerAuth.DeleteAccountConfirm)
 
 	repoUsers := repository.NewUsersRepository(database)
-	serviceUsers := service.NewUsersService(repoUsers)
+	producer := kafka.NewProducer()
+	serviceUsers := service.NewUsersService(repoUsers, producer)
 	handlerUsers := handler.NewUsersHandler(serviceUsers)
 
 	router.POST("/users/check-username", handlerUsers.CheckUsername)
@@ -69,6 +70,7 @@ func main() {
 	router.GET("/internal/users/:id/profile", handlerUsers.GetProfileMinimum)
 	router.GET("/internal/users/:id/followers", handlerUsers.GetFollowersID)
 	router.POST("/internal/relationship", handlerUsers.GetRelationships)
+	router.POST("/internal/batch-profiles", handlerUsers.BatchProfiles)
 
 	go func() {
 		log.Println("Kafka consumer started")

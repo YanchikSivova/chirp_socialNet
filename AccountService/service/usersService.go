@@ -1,19 +1,24 @@
 package service
 
 import (
+	"accountService/kafka"
+	"accountService/kafkaEvents"
 	"accountService/models"
 	"accountService/repository"
 	"context"
 	"errors"
 	"github.com/google/uuid"
+	"log"
+	"time"
 )
 
 type UsersService struct {
-	repo *repository.UsersRepository
+	repo     *repository.UsersRepository
+	producer *kafka.NotificationProducer
 }
 
-func NewUsersService(r *repository.UsersRepository) *UsersService {
-	return &UsersService{repo: r}
+func NewUsersService(r *repository.UsersRepository, pr *kafka.NotificationProducer) *UsersService {
+	return &UsersService{repo: r, producer: pr}
 }
 
 func (s *UsersService) CheckUsername(username string) (bool, error) {
@@ -154,12 +159,28 @@ func (s *UsersService) Follow(subscriberID, subscribedID uuid.UUID) error {
 		return err
 	}
 	defer tx.Rollback(ctx)
-
 	err = s.repo.Follow(ctx, tx, subscriberID, subscribedID)
 	if err != nil {
 		return err
 	}
-	return tx.Commit(ctx)
+	err = tx.Commit(ctx)
+	if err != nil {
+		return err
+	}
+	log.Println("Started to form kafka event")
+	event := kafkaEvents.NotificationEvent{
+		EventID:   uuid.New(),
+		ProfileID: subscribedID,
+		ActorID:   subscriberID,
+		Type:      "subscription",
+		EntityID:  subscriberID,
+		CreatedAt: time.Now(),
+	}
+	err = s.producer.SendSubscriptionCreated(ctx, event)
+	if err != nil {
+		log.Println("Failed to send subscription created event", err)
+	}
+	return nil
 }
 
 func (s *UsersService) Unfollow(subscriberID, subscribedID uuid.UUID) error {

@@ -4,3 +4,4 @@ AccountService/.env
 Gateway/.env
 PostService/.env
 MessageService/.env
+NotificationService/.env
