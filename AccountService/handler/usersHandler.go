@@ -639,3 +639,30 @@ func (h *UsersHandler) GetRelationships(c *gin.Context) {
 		Relationship: relationship,
 	})
 }
+
+func (h *UsersHandler) BatchProfiles(c *gin.Context) {
+	var req models.ProfileIDs
+	if err := c.ShouldBind(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if len(req.Profiles) == 0 {
+		c.JSON(http.StatusOK, []models.Profile{})
+		return
+	}
+	var profiles []models.ProfileMinimum
+	successCount := 0
+	for _, profileID := range req.Profiles {
+		profile, err := h.service.GetProfileMinimum(profileID)
+		if err != nil {
+			continue
+		}
+		profiles = append(profiles, *profile)
+		successCount++
+	}
+	if successCount == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "no profiles found"})
+		return
+	}
+	c.JSON(http.StatusOK, profiles)
+}

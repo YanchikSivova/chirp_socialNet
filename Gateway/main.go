@@ -22,7 +22,10 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-
+	notifProxy, err := proxy.NewReverseProxy("http://notification-service:8484")
+	if err != nil {
+		log.Fatal(err)
+	}
 	//PUBLIC routes
 	publicAuth := r.Group("/auth")
 	{
@@ -88,7 +91,13 @@ func main() {
 		protectedConversations.Any("", proxy.ProxyHandler(messageProxy))
 		protectedConversations.Any("/*path", proxy.ProxyHandler(messageProxy))
 	}
+	protectedNotif := r.Group("/notifications")
+	protectedNotif.Use(middleware.AuthMiddleware())
+	{
+		protectedNotif.Any("", proxy.ProxyHandler(notifProxy))
+		protectedNotif.Any("/*path", proxy.ProxyHandler(notifProxy))
+	}
 	r.Any("/ws", proxy.ProxyHandler(messageProxy))
-	
+
 	r.Run(":8000")
 }

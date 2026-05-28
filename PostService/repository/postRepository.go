@@ -58,7 +58,7 @@ func (r *PostRepository) DeletePostHashtags(ctx context.Context, tx pgx.Tx, post
 
 func (r *PostRepository) GetAuthorId(ctx context.Context, tx pgx.Tx, postId uuid.UUID) (uuid.UUID, error) {
 	var authorId uuid.UUID
-	err := tx.QueryRow(ctx, `SELECT profile_id from post WHERE post_id = $1`, postId).Scan(&authorId)
+	err := tx.QueryRow(ctx, `SELECT profile_id FROM post WHERE post_id = $1`, postId).Scan(&authorId)
 	return authorId, err
 }
 
@@ -174,13 +174,13 @@ func (r *PostRepository) CreateReport(ctx context.Context, tx pgx.Tx, postID, pr
 	return err
 }
 
-func (r *PostRepository) CreateComment(ctx context.Context, tx pgx.Tx, postID, profileID uuid.UUID, content string) error {
-	_, err := tx.Exec(ctx, `INSERT INTO comment (comment_id, post_id, profile_id, content) VALUES ($1, $2, $3, $4)`, uuid.New(), postID, profileID, content)
+func (r *PostRepository) CreateComment(ctx context.Context, tx pgx.Tx, commentID, postID, profileID uuid.UUID, content string) error {
+	_, err := tx.Exec(ctx, `INSERT INTO comment (comment_id, post_id, profile_id, content) VALUES ($1, $2, $3, $4)`, commentID, postID, profileID, content)
 	return err
 }
 
-func (r *PostRepository) CreateCommentWithParent(ctx context.Context, tx pgx.Tx, postID, profileID, parentCommentID uuid.UUID, content string) error {
-	_, err := tx.Exec(ctx, `INSERT INTO comment (comment_id, post_id, profile_id, parent_comment_id, content) VALUES ($1, $2, $3, $4, $5)`, uuid.New(), postID, profileID, parentCommentID, content)
+func (r *PostRepository) CreateCommentWithParent(ctx context.Context, tx pgx.Tx, commentID, postID, profileID, parentCommentID uuid.UUID, content string) error {
+	_, err := tx.Exec(ctx, `INSERT INTO comment (comment_id, post_id, profile_id, parent_comment_id, content) VALUES ($1, $2, $3, $4, $5)`, commentID, postID, profileID, parentCommentID, content)
 	return err
 }
 
@@ -323,4 +323,10 @@ func (r *PostRepository) GetPostsContent(ctx context.Context, tx pgx.Tx, postID 
 	var content string
 	err := tx.QueryRow(ctx, `SELECT content FROM post WHERE post_id=$1 and status='published'`, postID).Scan(&content)
 	return content, err
+}
+
+func (r *PostRepository) GetCommentAuthor(ctx context.Context, tx pgx.Tx, commentID uuid.UUID) (uuid.UUID, error) {
+	var authorID uuid.UUID
+	err := tx.QueryRow(ctx, `SELECT profile_id FROM comment WHERE comment_id = $1`, commentID).Scan(&authorID)
+	return authorID, err
 }

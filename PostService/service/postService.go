@@ -301,7 +301,34 @@ func (s *PostService) CreateLike(postID, profileID uuid.UUID) error {
 	if err != nil {
 		return err
 	}
-	return tx.Commit(ctx)
+	err = tx.Commit(ctx)
+	if err != nil {
+		return err
+	}
+	log.Println("started to form kafka event")
+	tx, err = s.repo.DB.Begin(ctx)
+	authorID, err := s.repo.GetAuthorId(ctx, tx, postID)
+	if err != nil {
+		log.Println("Cannot get author id")
+		return nil
+	}
+	if authorID == profileID {
+		log.Println("author id equals profile. cancel notification event")
+		return nil
+	}
+	event := kafkaEvents.NotificationEvent{
+		EventID:   uuid.New(),
+		ProfileID: authorID,
+		ActorID:   profileID,
+		Type:      "like",
+		EntityID:  postID,
+		CreatedAt: time.Now(),
+	}
+	err = s.producer.SendNotification(ctx, event)
+	if err != nil {
+		log.Println("failed to send event: ", err)
+	}
+	return nil
 }
 
 func (s *PostService) DeleteLike(postID, profileID uuid.UUID) error {
@@ -348,16 +375,30 @@ func (s *PostService) CreateRepost(postID, profileID uuid.UUID) error {
 		return err
 	}
 	log.Println("repost created event")
-	event := kafkaEvents.PostEvent{
+	repostEvent := kafkaEvents.PostEvent{
 		EventID:   uuid.New(),
 		ProfileID: profileID,
 		PostID:    postID,
 		IsRepost:  true,
 		CreatedAt: time.Now(),
 	}
-	err = s.producer.SendPostCreated(ctx, event)
+	err = s.producer.SendPostCreated(ctx, repostEvent)
 	if err != nil {
-		log.Println(err)
+		log.Println("failed to send repost event", err)
+	}
+	log.Println("started to form notification event")
+	tx, err = s.repo.DB.Begin(ctx)
+	notEvent := kafkaEvents.NotificationEvent{
+		EventID:   uuid.New(),
+		ProfileID: authorId,
+		ActorID:   profileID,
+		Type:      "repost",
+		EntityID:  postID,
+		CreatedAt: time.Now(),
+	}
+	err = s.producer.SendNotification(ctx, notEvent)
+	if err != nil {
+		log.Println("failed to send notification event", err)
 	}
 	return nil
 }
@@ -414,8 +455,9 @@ func (s *PostService) CreateComment(postID, profileID uuid.UUID, content string,
 	if content == "" || utf8.RuneCountInString(content) > 250 {
 		return errors.New("invalid content length")
 	}
+	commentID := uuid.New()
 	if parentCommentIDStr == "" {
-		err = s.repo.CreateComment(ctx, tx, postID, profileID, content)
+		err = s.repo.CreateComment(ctx, tx, commentID, postID, profileID, content)
 		if err != nil {
 			return err
 		}
@@ -431,12 +473,66 @@ func (s *PostService) CreateComment(postID, profileID uuid.UUID, content string,
 		if parentPostID != postID {
 			return errors.New("comment references to another post")
 		}
-		err = s.repo.CreateCommentWithParent(ctx, tx, postID, profileID, parentCommentID, content)
+		err = s.repo.CreateCommentWithParent(ctx, tx, commentID, postID, profileID, parentCommentID, content)
 		if err != nil {
 			return err
 		}
 	}
-	return tx.Commit(ctx)
+	err = tx.Commit(ctx)
+	if err != nil {
+		return err
+	}
+	log.Println("started to form notification comment event")
+	tx, err = s.repo.DB.Begin(ctx)
+	authorID, err := s.repo.GetAuthorId(ctx, tx, postID)
+	if err != nil {
+		log.Println("Cannot get author id")
+	} else if authorID == profileID {
+		log.Println("author id equals profile. cancel notification event")
+	} else {
+		commEvent := kafkaEvents.NotificationEvent{
+			EventID:   uuid.New(),
+			ProfileID: authorID,
+			ActorID:   profileID,
+			Type:      "comment",
+			EntityID:  commentID,
+			CreatedAt: time.Now(),
+		}
+		err = s.producer.SendNotification(ctx, commEvent)
+		if err != nil {
+			log.Println("failed to send comment event", err)
+		}
+	}
+	if parentCommentIDStr != "" {
+		log.Println("started to form notification answer event")
+		parentCommentID, err := uuid.Parse(parentCommentIDStr)
+		if err != nil {
+			log.Println("Cannot parse parent comment id")
+			return nil
+		}
+		authorID, err := s.repo.GetCommentAuthor(ctx, tx, parentCommentID)
+		if err != nil {
+			log.Println("Cannot get comment author id")
+			return nil
+		}
+		if authorID == profileID {
+			log.Println("author id equals profile. cancel notification event")
+			return nil
+		}
+		answerEvent := kafkaEvents.NotificationEvent{
+			EventID:   uuid.New(),
+			ProfileID: authorID,
+			ActorID:   profileID,
+			Type:      "answer",
+			EntityID:  commentID,
+			CreatedAt: time.Now(),
+		}
+		err = s.producer.SendNotification(ctx, answerEvent)
+		if err != nil {
+			log.Println("failed to send answer event", err)
+		}
+	}
+	return nil
 }
 
 func (s *PostService) CreateCommentLike(commentID, profileID uuid.UUID) error {
@@ -450,7 +546,34 @@ func (s *PostService) CreateCommentLike(commentID, profileID uuid.UUID) error {
 	if err != nil {
 		return err
 	}
-	return tx.Commit(ctx)
+	err = tx.Commit(ctx)
+	if err != nil {
+		return err
+	}
+	log.Println("started to form comment like event")
+	tx, err = s.repo.DB.Begin(ctx)
+	authorID, err := s.repo.GetCommentAuthor(ctx, tx, commentID)
+	if err != nil {
+		log.Println("Cannot get comment author id")
+		return nil
+	}
+	if authorID == profileID {
+		log.Println("author id equals profile. cancel notification event")
+		return nil
+	}
+	event := kafkaEvents.NotificationEvent{
+		EventID:   uuid.New(),
+		ProfileID: authorID,
+		ActorID:   profileID,
+		Type:      "comment_like",
+		EntityID:  commentID,
+		CreatedAt: time.Now(),
+	}
+	err = s.producer.SendNotification(ctx, event)
+	if err != nil {
+		log.Println("failed to send comment like event", err)
+	}
+	return nil
 }
 
 func (s *PostService) DeleteCommentLike(commentID, profileID uuid.UUID) error {

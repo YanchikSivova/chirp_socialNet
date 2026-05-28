@@ -9,8 +9,9 @@ import (
 )
 
 type Producer struct {
-	postCreatedWriter *kafkaGo.Writer
-	postDeletedWriter *kafkaGo.Writer
+	postCreatedWriter  *kafkaGo.Writer
+	postDeletedWriter  *kafkaGo.Writer
+	notificationWriter *kafkaGo.Writer
 }
 
 func NewProducer() *Producer {
@@ -25,6 +26,11 @@ func NewProducer() *Producer {
 			Topic:    "post-deleted",
 			Balancer: &kafkaGo.LeastBytes{},
 		},
+		notificationWriter: &kafkaGo.Writer{
+			Addr:     kafkaGo.TCP("kafka:9092"),
+			Topic:    "notification",
+			Balancer: &kafkaGo.LeastBytes{},
+		},
 	}
 }
 
@@ -33,6 +39,9 @@ func (p *Producer) Close() error {
 		return err
 	}
 	if err := p.postDeletedWriter.Close(); err != nil {
+		return err
+	}
+	if err := p.notificationWriter.Close(); err != nil {
 		return err
 	}
 	return nil
@@ -77,5 +86,24 @@ func (p *Producer) SendPostDeleted(ctx context.Context, event kafkaEvents.PostEv
 		return err
 	}
 	log.Println("Kafka message sent successfully")
+	return nil
+}
+
+func (p *Producer) SendNotification(ctx context.Context, event kafkaEvents.NotificationEvent) error {
+	log.Println("Send Subscription Created Event")
+	bytes, err := json.Marshal(event)
+	if err != nil {
+		log.Println("Marshal error:", err)
+		return err
+	}
+	err = p.notificationWriter.WriteMessages(ctx, kafkaGo.Message{
+		Key:   []byte(event.ProfileID.String()),
+		Value: bytes,
+	})
+	if err != nil {
+		log.Println("Write error:", err)
+		return err
+	}
+	log.Println("Subscription Created Event sent successfully")
 	return nil
 }
