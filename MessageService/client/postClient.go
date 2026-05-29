@@ -34,7 +34,7 @@ func (c *PostClient) BatchPosts(posts models.PostIDs) (*models.PostPreviews, err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("unexpected status code: %d", resp.Status)
+		return nil, fmt.Errorf("unexpected status code: %s", resp.Status)
 	}
 	var previews models.PostPreviews
 	err = json.NewDecoder(resp.Body).Decode(&previews)
