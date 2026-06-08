@@ -1,0 +1,50 @@
+.main-page {
+    display: flex;
+    flex-direction: column;
+
+    width: 100vw;
+    max-width: 440px;
+
+    min-height: 100vh;
+    min-height: 100dvh;
+
+    margin: 0 auto;
+
+    background: #ffffff;
+}
+
+.main-header {
+    display: grid;
+
+    flex: 0 0 clamp(82px, 25.7vw, 113px);
+
+    place-items: center;
+
+    background: #000000;
+
+    position: sticky;
+    top: 0;
+
+    z-index: 50;
+}
+
+.main-content {
+    flex: 1;
+
+    padding:
+            clamp(20px, 6vw, 28px)
+            clamp(16px, 5vw, 24px)
+            clamp(90px, 24vw, 110px);
+}
+
+.logo-text {
+    color: #ffffff;
+
+    font-size: clamp(3.25rem, 16.3vw, 4.55rem);
+
+    font-weight: 1000;
+
+    line-height: 0.78;
+    font-family: 'Callysto', sans-serif;
+    transform: scaleX(1.08);
+}

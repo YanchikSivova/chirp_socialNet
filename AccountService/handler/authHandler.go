@@ -198,7 +198,7 @@ func (h *AuthHandler) Refresh(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
 		return
 	}
-	c.SetCookie("refresh_token", refresh, 7*24*60*60, "/auth/refresh", "", false, true)
+	c.SetCookie("refresh_token", refresh, 7*24*60*60, "/", "", false, true)
 	c.JSON(http.StatusOK, LoginResponse{
 		AccessToken: access,
 	})

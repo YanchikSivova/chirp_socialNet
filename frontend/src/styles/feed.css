@@ -1,0 +1,36 @@
+.feed-page {
+    padding-bottom: 90px;
+}
+
+.feed-topbar {
+    display: flex;
+    justify-content: flex-end;
+
+    padding: 12px 16px;
+
+}
+
+.feed-search-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    width: 40px;
+    height: 40px;
+
+    border: none;
+    background: transparent;
+
+    cursor: pointer;
+}
+
+.feed-search-btn img {
+    width: 22px;
+    height: 22px;
+
+    filter: brightness(0);
+}
+
+.feed-posts{
+    margin-inline:20px;
+}
