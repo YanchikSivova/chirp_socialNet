@@ -1,0 +1,99 @@
+.post-page {
+    padding:
+            clamp(90px, 20vw, 110px)
+            16px
+            120px;
+}
+
+.comments-list {
+    margin-top: 24px;
+}
+
+.comment-card {
+    padding: 14px 0;
+
+    border-bottom: 1px solid #eaeaea;
+}
+
+.comment-header {
+    display: flex;
+    gap: 8px;
+
+    margin-bottom: 8px;
+}
+
+.comment-header span {
+    color: #777777;
+}
+
+.comment-content {
+    margin: 0 0 10px;
+
+    line-height: 1.5;
+}
+
+.comment-like-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+
+    border: none;
+    background: transparent;
+
+    cursor: pointer;
+}
+
+.comment-like-btn img {
+    width: 18px;
+    height: 18px;
+}
+
+.comment-input-wrapper {
+    position: fixed;
+
+    left: 50%;
+    bottom: 70px;
+
+    transform: translateX(-50%);
+
+    width: 100%;
+    max-width: 440px;
+
+    display: flex;
+    gap: 10px;
+
+    padding: 12px 16px;
+
+    background: #ffffff;
+
+    border-top: 1px solid #eaeaea;
+}
+
+.comment-input-wrapper input {
+    flex: 1;
+
+    height: 42px;
+
+    padding: 0 14px;
+
+    border: 1px solid #dddddd;
+    border-radius: 12px;
+}
+
+.comment-input-wrapper button {
+    border: none;
+    border-radius: 12px;
+
+    padding: 0 16px;
+
+    background: #000000;
+    color: #ffffff;
+
+    font-weight: 600;
+
+    cursor: pointer;
+}
+
+.clickable-post {
+    cursor: pointer;
+}
