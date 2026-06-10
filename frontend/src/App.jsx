@@ -10,6 +10,8 @@ import { useLocation } from 'react-router-dom';
 import FeedPage from './pages/FeedPage.jsx';
 import SearchPage from "./pages/SearchPage.jsx";
 import PostPage from "./pages/PostPage.jsx";
+import NotificationsPage from './pages/NotificationsPage.jsx';
+import ChatsPage from './pages/ChatsPage.jsx';
 function App() {
   const [loading, setLoading] = useState(true);
   const [me, setMe] = useState(null);
@@ -92,6 +94,13 @@ function App() {
     return <UserProfilePage me={me} />;
   }
 
+  if (path === '/notifications') {
+    return <NotificationsPage />;
+  }
+
+  if (path === '/chats') {
+    return <ChatsPage />;
+  }
   window.location.href = '/';
   return null;
 }

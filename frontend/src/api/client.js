@@ -267,3 +267,16 @@ export async function deleteCommentLike(commentId) {
 
   return response.data;
 }
+
+export async function getNotifications() {
+  const response = await api.get('/notifications');
+
+  return response.data;
+}
+export async function getConversations() {
+  const response = await api.get(
+      '/conversations'
+  );
+
+  return response.data;
+}
